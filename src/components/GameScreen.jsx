@@ -194,6 +194,12 @@ export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular
 
   // Build custom pieces with power-activated sprite variants
   const customPieces = {
+    wK: () => <PoweredSpritePiece type="k" color="w" game={game} />,
+    wQ: () => <PoweredSpritePiece type="q" color="w" game={game} />,
+    wR: () => <PoweredSpritePiece type="r" color="w" game={game} />,
+    wB: () => <PoweredSpritePiece type="b" color="w" game={game} />,
+    wN: () => <PoweredSpritePiece type="n" color="w" game={game} />,
+    wP: () => <PoweredSpritePiece type="p" color="w" game={game} />,
     bK: () => <PoweredSpritePiece type="k" color="b" game={game} />,
     bQ: () => <PoweredSpritePiece type="q" color="b" game={game} />,
     bR: () => <PoweredSpritePiece type="r" color="b" game={game} />,
