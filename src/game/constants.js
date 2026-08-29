@@ -76,3 +76,37 @@ export function hasAllyKnightAdjacent(board, r, c, color) {
   }
   return false
 }
+
+export function findNearestEmptySquare(board, r, c) {
+  const tryDirs = (dirs) => {
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr
+      const nc = c + dc
+      if (isInBoard(nr, nc) && !board[nr][nc]) return squareName(nr, nc)
+    }
+    return null
+  }
+  const ortho = tryDirs(ROOK_DIRS)
+  if (ortho) return ortho
+  const diag = tryDirs(BISHOP_DIRS)
+  if (diag) return diag
+
+  const queue = [[r, c]]
+  const seen = new Set([r * 8 + c])
+  let head = 0
+  while (head < queue.length) {
+    const [cr, cc] = queue[head]
+    head += 1
+    for (const [dr, dc] of KING_DIRS) {
+      const nr = cr + dr
+      const nc = cc + dc
+      if (!isInBoard(nr, nc)) continue
+      const key = nr * 8 + nc
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (!board[nr][nc]) return squareName(nr, nc)
+      queue.push([nr, nc])
+    }
+  }
+  return null
+}

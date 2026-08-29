@@ -20,6 +20,24 @@ export const HORSE_LINES = [
   'Hooves of justice 🐴⚡',
 ]
 
+export const DISMOUNT_LINES = [
+  'Dismount. Back to walking. 🚶',
+  'The ride is over. Horses need breaks. 🐎',
+  'Off the horse, back to pawn business. ♟️',
+  'The centaur retires... for now. 🤠',
+]
+
+export const MOVE_LINES = [
+  'Classic. 📐',
+  'Smooth. 🧈',
+  'Mind games. 🧠',
+  'Silent but deadly. 🤫',
+  'Wide left. 🏈',
+  'No comment. 🤐',
+  'Big brain move. 🧠⚡',
+  'There it is. 👀',
+]
+
 export const KILL_LINES = {
   p: [
     'A PAWN did it. The most humble piece. 💀',

@@ -63,3 +63,102 @@ body {
     opacity: 1;
   }
 }
+
+/* arco de montaje: el peon se sube al caballo */
+.mount-fx {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mount-fx .fx-horse {
+  position: absolute;
+  bottom: 2%;
+  font-size: 1.9em;
+  line-height: 1;
+  animation: mount-horse 0.5s ease forwards;
+}
+
+.mount-fx .fx-pawn {
+  position: absolute;
+  bottom: 4%;
+  font-size: 1.7em;
+  line-height: 1;
+  animation: mount-pawn 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes mount-pawn {
+  0% {
+    opacity: 1;
+    transform: translate(0, 30%) scale(1.2);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(8%, -130%) scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-4%, -210%) scale(0.6);
+  }
+}
+
+@keyframes mount-horse {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(25%);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02) translateY(-2%);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* contador de turnos restantes de una montura */
+.mounted-badge {
+  position: absolute;
+  z-index: 10;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #16171b;
+  background: #c6ff3d;
+  border-radius: 2px;
+  padding: 2px 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* scrollbar del panel de movimientos, a juego con el tema */
+.history-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2d33 transparent;
+}
+
+.history-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-scroll::-webkit-scrollbar-thumb {
+  background: #2a2d33;
+  border: 2px solid #1e2025;
+  border-radius: 4px;
+}
+
+.history-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3a3e46;
+}
+
+.history-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
