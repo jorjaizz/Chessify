@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createInitialState, getMoves, applyMove, boardPosition } from '../game/engine.js'
-import { rcOf, squareName } from '../game/constants.js'
+import { createInitialState, getMoves, applyMove, boardPosition, spawnGem } from '../game/engine.js'
+import { rcOf, squareName, GEM_INTERVAL_MS } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
 import Stamp from './Stamp.jsx'
@@ -176,7 +176,8 @@ export default function GameScreen({ onMenu }) {
       }
     }
     const cell = game.board[rcOf(square).r]?.[rcOf(square).c]
-    setSelected(cell && cell.color === game.turn ? square : null)
+    const lockedHere = game.locked && game.locked.squares.has(square)
+    setSelected(cell && cell.color === game.turn && !lockedHere ? square : null)
   }
 
   function armPower(id) {
@@ -194,6 +195,22 @@ export default function GameScreen({ onMenu }) {
     clearTimeout(fxTimer.current)
     sfx.click()
   }
+
+  useEffect(() => {
+    if (game.winner || game.gem) return
+    const id = setInterval(() => {
+      setGame((g) => {
+        if (g.winner || g.gem) return g
+        const next = spawnGem(g)
+        if (next !== g) {
+          toastKey.current += 1
+          setToast({ text: '🍲 Olla sobre el tablero', kind: 'power', key: toastKey.current })
+        }
+        return next
+      })
+    }, GEM_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [game.winner, game.gem])
 
   const flashSquares = eligibleAbilities(game)
   const selectedAbilities = selected ? abilitiesFor(game, selected) : []
@@ -246,6 +263,9 @@ export default function GameScreen({ onMenu }) {
           <>
             <span className={`inline-block h-2 w-2 rounded-full ${game.turn === 'w' ? 'bg-paper' : 'bg-riot'}`} />
             {turnName} to move
+            {game.locked && (
+              <span className="text-riot">· {game.locked.squares.size} piezas bloqueadas 🔒</span>
+            )}
           </>
         ) : (
           <span className="text-paper">game over</span>
@@ -284,6 +304,30 @@ export default function GameScreen({ onMenu }) {
           className="pointer-events-none absolute"
           style={{ left: 10, top: 10, width: boardWidth, height: boardWidth }}
         >
+          {game.gem && (() => {
+            const { r, c } = rcOf(game.gem.square)
+            return (
+              <div
+                className="gem-cell"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+              >
+                <span className="gem-ring">🍲</span>
+              </div>
+            )
+          })()}
+
+          {game.locked &&
+            [...game.locked.squares].map((sq) => {
+              const { r, c } = rcOf(sq)
+              return (
+                <div
+                  key={`locked-${sq}`}
+                  className="locked-cell"
+                  style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+                />
+              )
+            })}
+
           {[...flashSquares].map((sq) => {
             const { r, c } = rcOf(sq)
             return (

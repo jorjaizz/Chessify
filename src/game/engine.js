@@ -11,7 +11,8 @@ import {
   KING_DIRS,
 } from './constants.js'
 import { POWERS } from './powers.js'
-import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES } from './messages.js'
+
+import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES, POT_LINES } from './messages.js'
 
 const BACK_RANK = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
@@ -39,7 +40,59 @@ export function createInitialState() {
     mounted: new Set(),
     mountedLeft: {},
     history: [],
+    gem: null,
+    locked: null,
+    usedGems: new Set(),
   }
+}
+
+function placeGem(state) {
+  const empty = []
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (!state.board[r][c]) empty.push(squareName(r, c))
+    }
+  }
+  if (empty.length === 0) return
+  const candidates = empty.filter((s) => s !== (state.gem && state.gem.square) && !state.usedGems.has(s))
+  const sq = pick(candidates.length ? candidates : empty)
+  state.gem = { square: sq, owner: state.turn }
+  state.usedGems.add(sq)
+}
+
+export function spawnGem(inputState) {
+  if (inputState.gem || inputState.winner) return inputState
+  const state = { ...inputState, usedGems: new Set(inputState.usedGems) }
+  placeGem(state)
+  return state
+}
+
+function pickLockedSquares(board, color) {
+  let bestCount = 0
+  const bestBlocks = []
+  for (let r = 0; r <= 6; r++) {
+    for (let c = 0; c <= 6; c++) {
+      const block = [
+        squareName(r, c),
+        squareName(r, c + 1),
+        squareName(r + 1, c),
+        squareName(r + 1, c + 1),
+      ]
+      const occupied = block.filter((sq) => {
+        const { r: br, c: bc } = rcOf(sq)
+        return board[br][bc] && board[br][bc].color === color
+      })
+      if (occupied.length > bestCount) {
+        bestCount = occupied.length
+        bestBlocks.length = 0
+        bestBlocks.push(occupied)
+      } else if (occupied.length === bestCount && occupied.length > 0) {
+        bestBlocks.push(occupied)
+      }
+    }
+  }
+  if (bestBlocks.length === 0) return []
+  return pick(bestBlocks)
 }
 
 export function boardPosition(state) {
@@ -62,6 +115,7 @@ export function boardPosition(state) {
 }
 
 export function getMoves(state, square) {
+  if (state.locked && state.locked.squares.has(square)) return []
   const { r, c } = rcOf(square)
   if (!isInBoard(r, c)) return []
   const me = state.board[r][c]
@@ -171,6 +225,8 @@ export function applyMove(inputState, from, to, move) {
     mounted: new Set(inputState.mounted),
     mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
+    usedGems: new Set(inputState.usedGems),
+    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
   }
 
   const { r, c } = rcOf(from)
@@ -255,8 +311,6 @@ export function applyMove(inputState, from, to, move) {
     events.sounds.push('victory')
   }
 
-  state.turn = me.color === 'w' ? 'b' : 'w'
-
   state.history.push({
     from,
     to,
@@ -266,6 +320,22 @@ export function applyMove(inputState, from, to, move) {
     capturedKing,
     comment: events.messages.length > 0 ? events.messages[events.messages.length - 1].text : pick(MOVE_LINES),
   })
+
+  state.turn = me.color === 'w' ? 'b' : 'w'
+
+  if (state.gem && to === state.gem.square) {
+    events.messages.push({ text: pick(POT_LINES), kind: 'power' })
+    events.sounds.push('power')
+    state.locked = {
+      owner: me.color,
+      squares: new Set(pickLockedSquares(state.board, state.turn)),
+    }
+    state.gem = null
+  }
+
+  if (state.locked && state.locked.owner === state.turn) {
+    state.locked = null
+  }
 
   return { state, events }
 }

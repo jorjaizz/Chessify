@@ -64,6 +64,66 @@ body {
   }
 }
 
+/* cuadrado especial (la OLLA) rosado claro transparente */
+.gem-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background-color: rgba(255, 140, 200, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(255, 105, 180, 0.85);
+}
+
+.gem-ring {
+  font-size: 40%;
+  line-height: 1;
+  animation: gem-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gem-pulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8%) scale(1.12);
+  }
+}
+
+.gem-blocked {
+  animation: gem-shake 0.5s ease-in-out infinite;
+}
+
+@keyframes gem-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+/* piezas del rival bloqueadas por la OLLA (naranja/rojo) */
+.locked-cell {
+  position: absolute;
+  pointer-events: none;
+  background-color: rgba(255, 120, 60, 0.32);
+  box-shadow: inset 0 0 0 2px rgba(255, 80, 40, 0.9);
+  animation: locked-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes locked-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* arco de montaje: el peon se sube al caballo */
 .mount-fx {
   position: absolute;
