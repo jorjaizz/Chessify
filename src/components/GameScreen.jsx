@@ -2,13 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useMutation } from 'convex/react'
 import { createInitialState, getMoves, applyMove, boardPosition, spawnGem } from '../game/engine.js'
 import { rcOf, squareName, GEM_INTERVAL_MS } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
+import { chooseBotMove } from '../game/bot.js'
 import { sfx } from '../game/sound.js'
+import { api } from '../../convex/_generated/api'
 import Stamp from './Stamp.jsx'
 import GameOver from './GameOver.jsx'
-import MountedPiece from './MountedPiece.jsx'
+import SpritePiece from './SpritePiece.jsx'
+import MountedSprite from './MountedSprite.jsx'
+import { spriteSrc } from './pieceSprites.js'
 import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
 
@@ -85,12 +90,26 @@ function buildSquareStyles(game, selected, activePower) {
   return styles
 }
 
-const customPieces = {
-  wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
-  bC: ({ squareWidth }) => <MountedPiece color="b" squareWidth={squareWidth} />,
+const PIECE_TYPES = ['k', 'q', 'r', 'b', 'n', 'p']
+
+function spritePieces(color) {
+  const pieces = {}
+  for (const type of PIECE_TYPES) {
+    const src = spriteSrc(color, type)
+    if (!src) continue
+    pieces[color + type.toUpperCase()] = () => <SpritePiece src={src} />
+  }
+  return pieces
 }
 
-export default function GameScreen({ onMenu }) {
+const customPieces = {
+  ...spritePieces('b'),
+  ...spritePieces('w'),
+  wC: () => <MountedSprite color="w" />,
+  bC: () => <MountedSprite color="b" />,
+}
+
+export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular' }) {
   const [game, setGame] = useState(createInitialState)
   const [selected, setSelected] = useState(null)
   const [activePower, setActivePower] = useState(null)
@@ -99,6 +118,8 @@ export default function GameScreen({ onMenu }) {
   const toastKey = useRef(0)
   const fxKey = useRef(0)
   const fxTimer = useRef(null)
+  const botBusy = useRef(false)
+  const recordResult = useMutation(api.users.recordResult)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   function announce(events) {
@@ -125,6 +146,9 @@ export default function GameScreen({ onMenu }) {
     const { state, events } = applyMove(game, move.from, move.to, move)
     setGame(state)
     announce(events)
+    if (mode === 'bot' && state.winner) {
+      recordResult({ result: state.winner === 'w' ? 'win' : 'loss' }).catch(() => {})
+    }
     setSelected(null)
     setActivePower(null)
     return true
@@ -132,6 +156,7 @@ export default function GameScreen({ onMenu }) {
 
   function onPieceDrop(sourceSquare, targetSquare) {
     if (game.winner) return false
+    if (mode === 'bot' && game.turn === 'b') return false
     const all = getMoves(game, sourceSquare)
     const move = activePower && activePower.square === sourceSquare
       ? all.filter((m) => m.isPower && m.powerId === activePower.id).find((m) => m.to === targetSquare)
@@ -142,6 +167,7 @@ export default function GameScreen({ onMenu }) {
 
   function onSquareClick(square) {
     if (game.winner) return
+    if (mode === 'bot' && game.turn === 'b') return
     if (activePower) {
       const m = getMoves(game, activePower.square).find(
         (x) => x.isPower && x.powerId === activePower.id && x.to === square
@@ -177,8 +203,24 @@ export default function GameScreen({ onMenu }) {
     setToast(null)
     setMountFx(null)
     clearTimeout(fxTimer.current)
+    botBusy.current = false
     sfx.click()
   }
+
+  useEffect(() => {
+    if (mode !== 'bot' || game.winner || game.turn !== 'b' || botBusy.current) return
+    botBusy.current = true
+    const t = setTimeout(() => {
+      if (!botBusy.current) return
+      botBusy.current = false
+      const cm = chooseBotMove(game, botLevel)
+      if (cm) execute(cm)
+    }, 650)
+    return () => {
+      clearTimeout(t)
+      botBusy.current = false
+    }
+  }, [game])
 
   useEffect(() => {
     if (game.winner || game.gem) return
@@ -216,7 +258,7 @@ export default function GameScreen({ onMenu }) {
     : null
 
   return (
-    <div className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
+    <div data-mode={mode} className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
       <div className="flex w-full max-w-[560px] items-center justify-between font-mono text-xs uppercase tracking-widest">
         <div className="flex items-center gap-4">
           <button
@@ -249,6 +291,11 @@ export default function GameScreen({ onMenu }) {
             {turnName} to move
             {game.locked && (
               <span className="text-riot">· {game.locked.squares.size} piezas bloqueadas 🔒</span>
+            )}
+            {mode === 'bot' && (
+              <span className={game.turn === 'b' ? 'text-riot' : 'text-volt'}>
+                {game.turn === 'b' ? ' · bot thinking…' : ' · you (white)'}
+              </span>
             )}
           </>
         ) : (

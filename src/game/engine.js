@@ -297,8 +297,7 @@ export function applyMove(inputState, from, to, move) {
       const eject = findNearestEmptySquare(state.board, sr.r, sr.c)
       if (eject) {
         const er = rcOf(eject)
-        state.board[er.r][er.c] =
-          er.r === 0 || er.r === 7 ? { type: 'q', color } : { type: 'p', color }
+        state.board[er.r][er.c] = { type: 'p', color }
       }
       events.messages.push({ text: pick(DISMOUNT_LINES), kind: 'info' })
       events.sounds.push('dismount')
@@ -337,5 +336,22 @@ export function applyMove(inputState, from, to, move) {
     state.locked = null
   }
 
+  // Rival immobilized? No legal moves → the side that just moved wins.
+  if (!state.winner && !hasLegalMoves(state)) {
+    state.winner = me.color
+    events.sounds.push('victory')
+  }
+
   return { state, events }
+}
+
+function hasLegalMoves(state) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]
+      if (!p || p.color !== state.turn) continue
+      if (getMoves(state, squareName(r, c)).length > 0) return true
+    }
+  }
+  return false
 }
