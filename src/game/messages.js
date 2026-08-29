@@ -20,6 +20,14 @@ export const HORSE_LINES = [
   'Hooves of justice 🐴⚡',
 ]
 
+export const POT_LINES = [
+  '🍲 OLLA! Bloqueadas 4 piezas del rival.',
+  'CAZOLETA! 🔒 4 piezas rivales aturdidas.',
+  '🍲 ¡Olla cayendo! Cuatro rivales en pausa.',
+  'BOOM de olla 💥 Rival frozen (4 piezas).',
+  '🍲 Sopita... 4 piezas rivales quietas.',
+]
+
 export const KILL_LINES = {
   p: [
     'A PAWN did it. The most humble piece. 💀',
