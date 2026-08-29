@@ -17,7 +17,7 @@ export default class ErrorBoundary extends Component {
           <div className="text-6xl">⚠️</div>
           <h1 className="text-3xl font-black text-crimson">SOMETHING EXPLODED</h1>
           <pre className="max-w-xl overflow-auto rounded-lg bg-black/40 p-4 text-left text-sm text-crimson/90">
-            {String(this.state.error && this.state.error.message)}
+            {String(this.state.error && this.state.error.stack || String(this.state.error && this.state.error.message))}
           </pre>
           <button
             onClick={() => window.location.reload()}

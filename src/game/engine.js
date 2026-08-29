@@ -53,6 +53,7 @@ export function boardPosition(state) {
 
 export function getMoves(state, square) {
   const { r, c } = rcOf(square)
+  if (!isInBoard(r, c)) return []
   const me = state.board[r][c]
   if (!me || me.color !== state.turn) return []
 

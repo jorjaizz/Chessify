@@ -156,7 +156,7 @@ export default function GameScreen({ onMenu }) {
             boardOrientation="white"
             boardWidth={boardWidth}
             onPieceDrop={onPieceDrop}
-            onPieceDragBegin={(sourceSquare) => setSelected(sourceSquare)}
+            onPieceDragBegin={(piece, sourceSquare) => setSelected(sourceSquare)}
             onPieceDragEnd={() => setSelected(null)}
             onSquareClick={onSquareClick}
             customDndBackend={HTML5Backend}
