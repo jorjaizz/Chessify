@@ -9,6 +9,12 @@ export const CAPTURE_LINES = [
   'Sacked! 📦',
   'No survivors 😤',
   'Piece of cake 🍰',
+  'Millions must die 💀',
+  'Is that for me? 😋',
+  'Its not you, Its me 👺',
+  'Im iron piece 🤖',
+
+
 ]
 
 export const HORSE_LINES = [
@@ -18,6 +24,15 @@ export const HORSE_LINES = [
   'Galloping into battle 🐎',
   'TRAIL RIDE! 🔥',
   'Hooves of justice 🐴⚡',
+]
+
+export const KICK_LINES = [
+  'KICK YOUR 4$$ UP! 🦵💥',
+  'CHIIIIIN! 🐴💨',
+  'Horse says NO. 🐴',
+  'Brought the hoof. 🥾',
+  'Lunging kick! ⚡',
+  'Bye bye, mr piece . 👋',
 ]
 
 export const DISMOUNT_LINES = [

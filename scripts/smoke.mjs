@@ -193,4 +193,103 @@ let state = createInitialState()
   assert.ok(!getMoves(kg, 'e1').some((m) => m.to === 'e2'), 'king cannot capture its own pawn')
 }
 
+{
+  const kk = createInitialState()
+  kk.board[4][3] = { type: 'n', color: 'w' }
+  kk.board[3][5] = { type: 'r', color: 'b' }
+  kk.turn = 'w'
+  const kick = getMoves(kk, 'd4').filter((m) => m.isPower && m.powerId === 'kick')
+  assert.equal(kick.length, 1, `knight at d4 kicks the rook at f5, got ${kick.length}`)
+  assert.equal(kick[0].to, 'e5', 'the lunge lands on the middle square e5 (diagonal toward f5)')
+  assert.equal(kick[0].kickTarget, 'f5', 'the victim square is recorded')
+  assert.equal(kick[0].capture, true, 'a kick is a capture')
+  const r = applyMove(kk, 'd4', 'e5', kick[0])
+  assert.equal(r.state.board[3][5], null, 'the rook at f5 is destroyed by the kick')
+  assert.equal(r.state.board[3][4].type, 'n', 'the knight lunged to e5')
+  assert.equal(r.state.board[3][4].color, 'w', 'knight keeps its color')
+  assert.equal(r.state.board[4][3], null, 'knight left d4')
+  assert.equal(r.state.turn, 'b', 'turn flips after the kick')
+  const nestedKick = r.state.board[3][4]
+  assert.ok(r.state.mountedLeft[nestedKick] === undefined, 'a kicking knight is never mounted')
+  assert.ok(r.events.sounds.includes('neigh'), 'kick plays the placeholder relincho')
+}
+
+{
+  const inner = createInitialState()
+  inner.board[4][3] = { type: 'n', color: 'w' }
+  inner.board[3][4] = { type: 'b', color: 'b' }
+  inner.turn = 'w'
+  const kick = getMoves(inner, 'd4').filter((m) => m.powerId === 'kick')
+  assert.equal(kick.length, 1, `internal enemy on e5 (right side) is kickable, got ${kick.length}`)
+  assert.equal(kick[0].to, 'e5', 'single-axis kick lands on the victim square itself')
+  assert.equal(kick[0].kickTarget, 'e5', 'single-axis victim is its own target')
+  const r = applyMove(inner, 'd4', 'e5', kick[0])
+  assert.equal(r.state.board[3][4].type, 'n', 'knight occupies the vacated e5')
+}
+
+{
+  const diag = createInitialState()
+  diag.board[4][3] = { type: 'n', color: 'w' }
+  diag.board[3][4] = { type: 'p', color: 'b' }
+  diag.turn = 'w'
+  const kick = getMoves(diag, 'd4').filter((m) => m.powerId === 'kick')
+  assert.equal(kick.length, 1, `internal diagonal enemy on e5 is kickable, got ${kick.length}`)
+  assert.equal(kick[0].to, 'e5', 'diagonal internal kick lands on the victim square')
+  assert.equal(kick[0].kickTarget, 'e5', 'diagonal internal victim is its own target')
+}
+
+{
+  const blocked = createInitialState()
+  blocked.board[4][3] = { type: 'n', color: 'w' }
+  blocked.board[3][5] = { type: 'r', color: 'b' }
+  blocked.board[3][4] = { type: 'p', color: 'w' }
+  blocked.turn = 'w'
+  const kicks = getMoves(blocked, 'd4')
+    .filter((m) => m.isPower && m.powerId === 'kick')
+    .map((m) => m.kickTarget)
+  assert.ok(!kicks.includes('f5'), 'a victim whose middle square is occupied cannot be kicked')
+}
+
+{
+  const mountedKick = createInitialState()
+  mountedKick.board[4][3] = { type: 'n', color: 'w' }
+  mountedKick.board[3][4] = { type: 'p', color: 'b' }
+  mountedKick.mounted = new Set(['e5'])
+  mountedKick.mountedLeft = { e5: 1 }
+  mountedKick.turn = 'w'
+  const kick = getMoves(mountedKick, 'd4').filter((m) => m.powerId === 'kick')
+  assert.ok(kick.length === 1, 'a mounted enemy pawn can be kicked')
+  const r = applyMove(mountedKick, 'd4', 'e5', kick[0])
+  assert.equal(r.state.board[3][4].type, 'n', 'knight lands on the kicked mount square')
+  assert.equal(r.state.mounted.size, 0, 'kicked mount leaves no mount state behind')
+  assert.equal(Object.keys(r.state.mountedLeft).length, 0, 'no countdown left for the kicked mount')
+}
+
+{
+  const kingKick = createInitialState()
+  kingKick.board[4][3] = { type: 'n', color: 'w' }
+  kingKick.board[3][4] = { type: 'k', color: 'b' }
+  kingKick.turn = 'w'
+  const kick = getMoves(kingKick, 'd4').filter((m) => m.powerId === 'kick')
+  assert.ok(kick.length === 1, 'the enemy king inside the circle can be kicked')
+  const { state: ns } = applyMove(kingKick, 'd4', 'e5', kick[0])
+  assert.equal(ns.winner, 'w', 'kicking the king wins the game')
+  assert.equal(ns.killer.type, 'n', 'the killer is the knight')
+  assert.equal(ns.killer.square, 'd4', 'the kill is credited to the knight origin square')
+}
+
+{
+  const neighbors = createInitialState()
+  neighbors.board[3][4] = { type: 'n', color: 'w' }
+  neighbors.board[3][5] = { type: 'p', color: 'w' }
+  neighbors.board[7][7] = { type: 'r', color: 'b' }
+  for (let c = 2; c <= 6; c++) {
+    neighbors.board[0][c] = null
+    neighbors.board[1][c] = null
+  }
+  neighbors.turn = 'w'
+  const kick = getMoves(neighbors, 'e5').filter((m) => m.powerId === 'kick')
+  assert.equal(kick.length, 0, 'a knight cannot kick its own pieces')
+}
+
 console.log('All engine smoke tests passed ✅')

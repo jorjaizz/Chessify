@@ -177,7 +177,9 @@ export function applyMove(inputState, from, to, move) {
   const { r: tr, c: tc } = rcOf(to)
 
   const me = state.board[r][c]
-  const target = state.board[tr][tc]
+  const capSq = move.kickTarget || to
+  const { r: cr, c: cc } = rcOf(capSq)
+  const target = state.board[cr][cc]
   const wasMounted = state.mounted.has(from)
 
   const events = { messages: [], sounds: [] }
@@ -195,9 +197,9 @@ export function applyMove(inputState, from, to, move) {
         events.messages.push({ text: pick(CAPTURE_LINES), kind: 'capture' })
       }
     }
-    state.board[tr][tc] = null
-    state.mounted.delete(to)
-    delete state.mountedLeft[to]
+    state.board[cr][cc] = null
+    state.mounted.delete(capSq)
+    delete state.mountedLeft[capSq]
   }
 
   state.board[tr][tc] = me
@@ -213,7 +215,7 @@ export function applyMove(inputState, from, to, move) {
     state.mounted.delete(from)
     const leftover = state.mountedLeft[from]
     delete state.mountedLeft[from]
-    if (!promotedToQueen) state.mounted.add(to)
+    if (!promotedToQueen && me.type === 'p') state.mounted.add(to)
     if (move.isPower) {
       const power = POWERS.find((p) => p.id === move.powerId)
       if (power && power.afterMove) {

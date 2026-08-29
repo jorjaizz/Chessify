@@ -1,5 +1,13 @@
-import { ROOK_DIRS, isInBoard, squareName, rcOf, hasAllyKnightAdjacent, pick } from './constants.js'
-import { HORSE_LINES } from './messages.js'
+import { ROOK_DIRS, KING_DIRS, KNIGHT_DELTAS, isInBoard, squareName, rcOf, hasAllyKnightAdjacent, pick } from './constants.js'
+import { HORSE_LINES, KICK_LINES } from './messages.js'
+
+const KICK_AREA = [...KING_DIRS, ...KNIGHT_DELTAS]
+
+function lungeStep(dr, dc) {
+  const sr = dr === 0 ? 0 : dr / Math.abs(dr)
+  const sc = dc === 0 ? 0 : dc / Math.abs(dc)
+  return [sr, sc]
+}
 
 export const POWERS = [
   {
@@ -44,6 +52,54 @@ export const POWERS = [
       state.mountedLeft[to] = 2
       events.sounds.push('neigh')
       events.messages.push({ text: pick(HORSE_LINES), kind: 'power' })
+      return events
+    },
+  },
+  {
+    id: 'kick',
+    name: 'KICK',
+    icon: '🦵',
+    pieceTypes: ['n'],
+    blurb:
+      'A knight rears up and kicks any enemy piece inside its circle — even ones it can never reach with an L — destroying it and lunging one square toward the impact.',
+    details:
+      'Click an eligible knight, grab the KICK pill and drop it onto an enemy piece in the knight circle (the 8 jump squares plus the 8 inner squares). The enemy is destroyed with a relincho, then the knight lunges one square toward the middle between itself and the victim.',
+    canUse(state, square, me) {
+      if (!me || me.type !== 'n') return false
+      if (me.color !== state.turn) return false
+      return this.getMoves(state, square, me).length > 0
+    },
+    getMoves(state, square, me) {
+      if (!me || me.type !== 'n') return []
+      if (me.color !== state.turn) return []
+      const { r, c } = rcOf(square)
+      const out = []
+      for (const [dr, dc] of KICK_AREA) {
+        const nr = r + dr
+        const nc = c + dc
+        if (!isInBoard(nr, nc)) continue
+        const target = state.board[nr][nc]
+        if (!target || target.color === me.color) continue
+        const [lr, lc] = lungeStep(dr, dc)
+        const ar = r + lr
+        const ac = c + lc
+        if (!isInBoard(ar, ac)) continue
+        const landingTarget = state.board[ar][ac]
+        if (landingTarget && (ar !== nr || ac !== nc)) continue
+        out.push({
+          from: square,
+          to: squareName(ar, ac),
+          capture: true,
+          isPower: true,
+          powerId: this.id,
+          kickTarget: squareName(nr, nc),
+        })
+      }
+      return out
+    },
+    afterMove(state, from, to, events) {
+      events.sounds.push('neigh')
+      events.messages.push({ text: pick(KICK_LINES), kind: 'power' })
       return events
     },
   },

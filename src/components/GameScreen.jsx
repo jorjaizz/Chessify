@@ -70,9 +70,21 @@ function buildSquareStyles(game, selected, activePower) {
   const list = armed || moves
   for (const m of list) {
     if (armed || m.isPower) {
-      styles[m.to] = {
-        boxShadow: 'inset 0 0 0 2px #C6FF3D',
-        backgroundColor: 'rgba(198,255,61,0.14)',
+      if (m.powerId === 'kick' && m.kickTarget) {
+        styles[m.kickTarget] = {
+          boxShadow: 'inset 0 0 0 2px #C6FF3D',
+          backgroundColor: 'rgba(198,255,61,0.14)',
+        }
+        if (m.to !== m.kickTarget) {
+          styles[m.to] = {
+            background: 'radial-gradient(circle, rgba(198,255,61,0.9) 0 17%, transparent 18%)',
+          }
+        }
+      } else {
+        styles[m.to] = {
+          boxShadow: 'inset 0 0 0 2px #C6FF3D',
+          backgroundColor: 'rgba(198,255,61,0.14)',
+        }
       }
     } else if (m.capture) {
       styles[m.to] = {
@@ -112,9 +124,12 @@ export default function GameScreen({ onMenu }) {
   const [activePower, setActivePower] = useState(null)
   const [toast, setToast] = useState(null)
   const [mountFx, setMountFx] = useState(null)
+  const [kickFx, setKickFx] = useState(null)
   const toastKey = useRef(0)
   const fxKey = useRef(0)
   const fxTimer = useRef(null)
+  const kickKey = useRef(0)
+  const kickTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   function announce(events) {
@@ -138,6 +153,12 @@ export default function GameScreen({ onMenu }) {
       setMountFx({ to: move.to, color: game.turn, key: fxKey.current })
       fxTimer.current = setTimeout(() => setMountFx(null), 700)
     }
+    if (move.isPower && move.powerId === 'kick' && move.kickTarget) {
+      clearTimeout(kickTimer.current)
+      kickKey.current += 1
+      setKickFx({ to: move.kickTarget, key: kickKey.current })
+      kickTimer.current = setTimeout(() => setKickFx(null), 550)
+    }
     const { state, events } = applyMove(game, move.from, move.to, move)
     setGame(state)
     announce(events)
@@ -150,7 +171,7 @@ export default function GameScreen({ onMenu }) {
     if (game.winner) return false
     const all = getMoves(game, sourceSquare)
     const move = activePower && activePower.square === sourceSquare
-      ? all.filter((m) => m.isPower && m.powerId === activePower.id).find((m) => m.to === targetSquare)
+      ? all.filter((m) => m.isPower && m.powerId === activePower.id).find((m) => m.to === targetSquare || m.kickTarget === targetSquare)
       : all.find((m) => m.to === targetSquare && !m.isPower)
     if (!move) return false
     return execute(move)
@@ -160,7 +181,7 @@ export default function GameScreen({ onMenu }) {
     if (game.winner) return
     if (activePower) {
       const m = getMoves(game, activePower.square).find(
-        (x) => x.isPower && x.powerId === activePower.id && x.to === square
+        (x) => x.isPower && x.powerId === activePower.id && (x.to === square || x.kickTarget === square)
       )
       if (m) {
         execute(m)
@@ -191,7 +212,9 @@ export default function GameScreen({ onMenu }) {
     setActivePower(null)
     setToast(null)
     setMountFx(null)
+    setKickFx(null)
     clearTimeout(fxTimer.current)
+    clearTimeout(kickTimer.current)
     sfx.click()
   }
 
@@ -321,6 +344,21 @@ export default function GameScreen({ onMenu }) {
                 >
                   <span className="fx-horse">🐴</span>
                   <span className="fx-pawn">{mountFx.color === 'w' ? '♙' : '♟'}</span>
+                </span>
+              )
+            })()}
+
+          {kickFx &&
+            (() => {
+              const { r, c } = rcOf(kickFx.to)
+              return (
+                <span
+                  key={kickFx.key}
+                  className="kick-fx"
+                  style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+                >
+                  <span className="fx-hoof">🦵</span>
+                  <span className="fx-boom">💥</span>
                 </span>
               )
             })()}
