@@ -8,7 +8,6 @@ import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
 import Stamp from './Stamp.jsx'
 import GameOver from './GameOver.jsx'
-import MountedPiece from './MountedPiece.jsx'
 import SpritePiece from './SpritePiece.jsx'
 import MountedSprite from './MountedSprite.jsx'
 import { spriteSrc } from './pieceSprites.js'
@@ -102,7 +101,8 @@ function spritePieces(color) {
 
 const customPieces = {
   ...spritePieces('b'),
-  wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
+  ...spritePieces('w'),
+  wC: () => <MountedSprite color="w" />,
   bC: () => <MountedSprite color="b" />,
 }
 
