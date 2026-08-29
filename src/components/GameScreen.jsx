@@ -363,8 +363,16 @@ export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular
   }
 
   function onPotDragStart(e) {
+    e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', 'pot')
     if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(e.currentTarget, 20, 20)
+  }
+
+  function onPotDragEnd(e) {
+    // Cleanup if drag was cancelled
+    if (e.dataTransfer.dropEffect === 'none') {
+      // Drag was cancelled, do nothing
+    }
   }
 
   function squareFromEvent(e) {
@@ -539,8 +547,22 @@ export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular
       <div
         ref={boardWrapRef}
         className="relative w-full max-w-[560px]"
+        onDragEnter={(e) => {
+          if (potArmed) {
+            e.preventDefault()
+          }
+        }}
         onDragOver={(e) => {
-          if (potArmed) e.preventDefault()
+          if (potArmed) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            onBoardMove(e)
+          }
+        }}
+        onDragLeave={(e) => {
+          if (e.target === boardWrapRef.current && potOrigin === null) {
+            setPotHover(null)
+          }
         }}
         onDrop={onBoardDrop}
         onMouseMove={onBoardMove}
@@ -777,7 +799,7 @@ export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular
 
               {potArmed && !potOrigin && (
                 <div className="flex flex-wrap items-center gap-3 rounded-sm border border-riot/40 bg-ink px-3 py-2">
-                  <span className="pot-draggable" draggable onDragStart={onPotDragStart}>🍲</span>
+                  <span className="pot-draggable" draggable={true} onDragStart={onPotDragStart} onDragEnd={onPotDragEnd}>🍲</span>
                   <span className="flex-1 font-mono text-[11px] uppercase tracking-wide text-muted">
                     Arrastra la olla sobre una casilla para rodearla y deslizar el bloque 2×2
                   </span>
