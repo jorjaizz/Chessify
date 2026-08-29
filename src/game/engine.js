@@ -42,6 +42,7 @@ export function createInitialState() {
     history: [],
     gem: null,
     locked: null,
+    blocks: { w: 0, b: 0 },
     usedGems: new Set(),
   }
 }
@@ -67,32 +68,56 @@ export function spawnGem(inputState) {
   return state
 }
 
-function pickLockedSquares(board, color) {
-  let bestCount = 0
-  const bestBlocks = []
-  for (let r = 0; r <= 6; r++) {
-    for (let c = 0; c <= 6; c++) {
-      const block = [
-        squareName(r, c),
-        squareName(r, c + 1),
-        squareName(r + 1, c),
-        squareName(r + 1, c + 1),
-      ]
-      const occupied = block.filter((sq) => {
-        const { r: br, c: bc } = rcOf(sq)
-        return board[br][bc] && board[br][bc].color === color
-      })
-      if (occupied.length > bestCount) {
-        bestCount = occupied.length
-        bestBlocks.length = 0
-        bestBlocks.push(occupied)
-      } else if (occupied.length === bestCount && occupied.length > 0) {
-        bestBlocks.push(occupied)
-      }
+export function potBlockSquaresFrom(blockSquare) {
+  const { r, c } = rcOf(blockSquare)
+  const out = []
+  for (let dr = 0; dr <= 1; dr++) {
+    for (let dc = 0; dc <= 1; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
     }
   }
-  if (bestBlocks.length === 0) return []
-  return pick(bestBlocks)
+  return out
+}
+
+function potBlockPieces(board, color, blockSquare) {
+  return potBlockSquaresFrom(blockSquare).filter((sq) => {
+    const { r: br, c: bc } = rcOf(sq)
+    return board[br] && board[br][bc] && board[br][bc].color === color
+  })
+}
+
+// área 9x9 de casillas alrededor de la olla donde se puede deslizar el bloque 2x2
+export function potAreaSquares(origin) {
+  const { r, c } = rcOf(origin)
+  const out = []
+  for (let dr = -4; dr <= 4; dr++) {
+    for (let dc = -4; dc <= 4; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
+    }
+  }
+  return out
+}
+
+export function applyBlock(inputState, blockSquare) {
+  const color = inputState.turn
+  if (inputState.blocks[color] < 1 || !blockSquare) return inputState
+  const state = {
+    ...inputState,
+    blocks: { ...inputState.blocks },
+    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
+  }
+  const enemy = color === 'w' ? 'b' : 'w'
+  const squares = potBlockPieces(state.board, enemy, blockSquare)
+  state.blocks[color] -= 1
+  state.locked = {
+    owner: color,
+    squares: new Set(squares),
+  }
+  return state
 }
 
 export function boardPosition(state) {
@@ -226,6 +251,7 @@ export function applyMove(inputState, from, to, move) {
     mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
     usedGems: new Set(inputState.usedGems),
+    blocks: { ...inputState.blocks },
     locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
   }
 
@@ -321,17 +347,13 @@ export function applyMove(inputState, from, to, move) {
     comment: events.messages.length > 0 ? events.messages[events.messages.length - 1].text : pick(MOVE_LINES),
   })
 
-  state.turn = me.color === 'w' ? 'b' : 'w'
-
   if (state.gem && to === state.gem.square) {
     events.messages.push({ text: pick(POT_LINES), kind: 'power' })
     events.sounds.push('power')
-    state.locked = {
-      owner: me.color,
-      squares: new Set(pickLockedSquares(state.board, state.turn)),
-    }
+    state.blocks[me.color] = (state.blocks[me.color] || 0) + 1
     state.gem = null
   }
+  state.turn = me.color === 'w' ? 'b' : 'w'
 
   if (state.locked && state.locked.owner === state.turn) {
     state.locked = null

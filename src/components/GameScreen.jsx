@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createInitialState, getMoves, applyMove, boardPosition, spawnGem } from '../game/engine.js'
+import { createInitialState, getMoves, applyMove, boardPosition, spawnGem, applyBlock, potBlockSquaresFrom, potAreaSquares } from '../game/engine.js'
 import { rcOf, squareName, GEM_INTERVAL_MS } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
@@ -96,6 +96,10 @@ export default function GameScreen({ onMenu }) {
   const [activePower, setActivePower] = useState(null)
   const [toast, setToast] = useState(null)
   const [mountFx, setMountFx] = useState(null)
+  const [potArmed, setPotArmed] = useState(false)
+  const [potColor, setPotColor] = useState(null)
+  const [potOrigin, setPotOrigin] = useState(null)
+  const [potHover, setPotHover] = useState(null)
   const toastKey = useRef(0)
   const fxKey = useRef(0)
   const fxTimer = useRef(null)
@@ -142,6 +146,10 @@ export default function GameScreen({ onMenu }) {
 
   function onSquareClick(square) {
     if (game.winner) return
+    if (potOrigin) {
+      confirmPotSquare(square)
+      return
+    }
     if (activePower) {
       const m = getMoves(game, activePower.square).find(
         (x) => x.isPower && x.powerId === activePower.id && x.to === square
@@ -170,10 +178,85 @@ export default function GameScreen({ onMenu }) {
     setActivePower({ id, square: selected })
   }
 
+  function armBlock(color) {
+    if (game.blocks[color] < 1 || game.turn !== color) return
+    sfx.click()
+    setPotColor(color)
+    setPotArmed(true)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function leaveBlockMode() {
+    setPotArmed(false)
+    setPotColor(null)
+    setPotOrigin(null)
+    setPotHover(null)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function onPotDrop(targetSquare) {
+    if (!targetSquare) return
+    sfx.click()
+    setPotOrigin(targetSquare)
+    setPotHover(targetSquare)
+    setPotArmed(false)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function confirmPotSquare(blockSquare) {
+    if (!potOrigin || !blockSquare) return
+    sfx.click()
+    setGame((g) => applyBlock(g, blockSquare))
+    leaveBlockMode()
+  }
+
+  function cancelPotSelection() {
+    leaveBlockMode()
+  }
+
+  function onPotDragStart(e) {
+    e.dataTransfer.setData('text/plain', 'pot')
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(e.currentTarget, 20, 20)
+  }
+
+  function squareFromEvent(e) {
+    const el = boardWrapRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const offset = 10
+    const bx = rect.left + offset
+    const by = rect.top + offset
+    const sq = boardWidth / 8
+    const col = Math.floor((e.clientX - bx) / sq)
+    const row = Math.floor((e.clientY - by) / sq)
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null
+    return 'abcdefgh'[col] + '87654321'[row]
+  }
+
+  function onBoardMove(e) {
+    if (!potOrigin) return
+    const target = squareFromEvent(e)
+    if (target && potAreaSquares(potOrigin).includes(target)) setPotHover(target)
+  }
+
+  function onBoardDrop(e) {
+    if (!potArmed) return
+    e.preventDefault()
+    const target = squareFromEvent(e)
+    if (target) onPotDrop(target)
+  }
+
   function reset() {
     setGame(createInitialState())
     setSelected(null)
     setActivePower(null)
+    setPotArmed(false)
+    setPotColor(null)
+    setPotOrigin(null)
+    setPotHover(null)
     setToast(null)
     setMountFx(null)
     clearTimeout(fxTimer.current)
@@ -215,6 +298,9 @@ export default function GameScreen({ onMenu }) {
       })()
     : null
 
+  const potArea = potOrigin ? potAreaSquares(potOrigin) : []
+  const potPreview = potOrigin && potHover ? potBlockSquaresFrom(potHover) : []
+
   return (
     <div className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
       <div className="flex w-full max-w-[560px] items-center justify-between font-mono text-xs uppercase tracking-widest">
@@ -239,7 +325,7 @@ export default function GameScreen({ onMenu }) {
 
       <div className="flex w-full max-w-[1100px] flex-col items-center justify-center gap-4 lg:flex-row lg:items-start">
         <div className="order-2 w-full max-w-[560px] lg:order-1 lg:w-56">
-          <PowerSidebar />
+          <PowerSidebar blocks={game.blocks} turn={game.turn} active={potColor} onUse={armBlock} />
         </div>
         <div className="order-1 flex w-full max-w-[560px] flex-col items-center gap-4 lg:order-2">
       <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
@@ -256,7 +342,15 @@ export default function GameScreen({ onMenu }) {
         )}
       </div>
 
-      <div ref={boardWrapRef} className="relative w-full max-w-[560px]">
+      <div
+        ref={boardWrapRef}
+        className="relative w-full max-w-[560px]"
+        onDragOver={(e) => {
+          if (potArmed) e.preventDefault()
+        }}
+        onDrop={onBoardDrop}
+        onMouseMove={onBoardMove}
+      >
         <div className="relative rounded-sm border-2 border-ink-2 bg-ink-2 p-2">
           {['-left-[3px] -top-[3px] border-l-2 border-t-2', '-right-[3px] -top-[3px] border-r-2 border-t-2', '-left-[3px] -bottom-[3px] border-l-2 border-b-2', '-right-[3px] -bottom-[3px] border-r-2 border-b-2'].map((pos) => (
             <span key={pos} className={`pointer-events-none absolute h-4 w-4 border-volt ${pos}`} />
@@ -311,6 +405,42 @@ export default function GameScreen({ onMenu }) {
                 />
               )
             })}
+
+          {potArea.map((sq) => {
+            const { r, c } = rcOf(sq)
+            return (
+              <div
+                key={`area-${sq}`}
+                className="pot-area-cell"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+              />
+            )
+          })}
+
+          {potPreview.map((sq) => {
+            const { r, c } = rcOf(sq)
+            return (
+              <div
+                key={`preview-${sq}`}
+                className="locked-cell pot-preview"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+              />
+            )
+          })}
+
+          {potOrigin && (
+            (() => {
+              const { r, c } = rcOf(potOrigin)
+              return (
+                <span
+                  className="pot-marker"
+                  style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+                >
+                  🍲
+                </span>
+              )
+            })()
+          )}
 
           {[...flashSquares].map((sq) => {
             const { r, c } = rcOf(sq)
@@ -408,6 +538,68 @@ export default function GameScreen({ onMenu }) {
         </AnimatePresence>
       </div>
 
+      <AnimatePresence>
+        {(potArmed || potOrigin) && (
+          <div
+            key="powers-panel"
+            className="pointer-events-auto z-40 w-full max-w-[560px] rounded-sm border-2 border-riot bg-ink-2 p-3 shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.15 }}
+            >
+              <div className="mb-2 font-display text-sm uppercase tracking-widest text-riot">
+                ⚡ Block 2×2
+              </div>
+
+              {potArmed && !potOrigin && (
+                <div className="flex flex-wrap items-center gap-3 rounded-sm border border-riot/40 bg-ink px-3 py-2">
+                  <span className="pot-draggable" draggable onDragStart={onPotDragStart}>🍲</span>
+                  <span className="flex-1 font-mono text-[11px] uppercase tracking-wide text-muted">
+                    Arrastra la olla sobre una casilla para rodearla y deslizar el bloque 2×2
+                  </span>
+                  <button
+                    onClick={cancelPotSelection}
+                    className="rounded-sm border border-muted/40 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted transition-colors hover:text-paper"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {potOrigin && (
+                <div className="flex flex-col gap-2">
+                  <div className="rounded-sm border border-riot/40 bg-ink px-3 py-2">
+                    <div className="font-mono text-[11px] uppercase tracking-wide text-paper">
+                      🍲 Olla en {potOrigin}
+                    </div>
+                    <div className="mt-1 font-mono text-[10px] normal-case tracking-normal text-muted">
+                      Mueve el ratón por el área 9×9 (amarillo) para deslizar el bloque 2×2 (naranja). Clic en el tablero para confirmar.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => potHover && confirmPotSquare(potHover)}
+                      className="rounded-sm border border-volt bg-volt/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-volt transition-colors hover:bg-volt hover:text-ink"
+                    >
+                      Usar{potPreview.length ? ` (${potPreview.length})` : ''}
+                    </button>
+                    <button
+                      onClick={cancelPotSelection}
+                      className="rounded-sm border border-muted/40 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted transition-colors hover:text-paper"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="relative mt-1 flex h-12 w-full max-w-[560px] items-center justify-center">
         <AnimatePresence mode="wait">
           {toast && <Stamp key={toast.key} text={toast.text} kind={toast.kind} />}
@@ -419,6 +611,7 @@ export default function GameScreen({ onMenu }) {
           <HistoryPanel entries={game.history} />
         </div>
       </div>
+
     </div>
   )
 }

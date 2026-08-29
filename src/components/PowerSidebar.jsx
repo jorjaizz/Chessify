@@ -1,49 +1,59 @@
-import { POWERS } from '../game/powers.js'
-import { TYPE_UNICODE } from '../game/constants.js'
+const COLORS = [
+  { id: 'w', label: 'White', dot: 'bg-paper' },
+  { id: 'b', label: 'Black', dot: 'bg-riot' },
+]
 
-const PIECE_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }
-
-export default function PowerSidebar() {
+export default function PowerSidebar({ blocks = { w: 0, b: 0 }, turn = 'w', active = null, onUse }) {
   return (
     <aside className="w-full rounded-sm border-2 border-ink-2 bg-ink-2 lg:sticky lg:top-6 lg:w-56">
       <div className="flex items-center justify-between border-b-2 border-ink px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-volt">
-        <span>Special moves</span>
-        <span className="text-muted">{POWERS.length}</span>
+        <span>🍲 Bonds</span>
+        <span className="text-muted">{blocks.w + blocks.b}</span>
       </div>
-      <div className="flex flex-col gap-2.5 overflow-y-auto px-3 py-2.5 lg:max-h-[calc(100vh-150px)]">
-        {POWERS.length === 0 && (
-          <p className="font-mono text-[11px] uppercase tracking-wide text-muted">
-            no special moves yet
+      <div className="flex flex-col gap-2.5 px-3 py-2.5">
+        {COLORS.map((c) => {
+          const isTurn = turn === c.id
+          const count = blocks[c.id] || 0
+          return (
+            <div
+              key={c.id}
+              className={`rounded-sm border bg-ink p-2.5 transition-colors ${
+                isTurn ? 'border-volt/50' : 'border-ink'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block h-2 w-2 rounded-full ${c.dot}`} />
+                  <span className="font-mono text-[11px] uppercase tracking-wide text-paper">
+                    {c.label}
+                  </span>
+                </div>
+                <span className="font-mono text-sm text-riot">×{count}</span>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-muted">
+                🍲 Bloquea piezas del rival en un bloque 2×2.
+              </p>
+              <button
+                disabled={!isTurn || count < 1 || active !== null}
+                onClick={() => onUse(c.id)}
+                className={`mt-2 w-full rounded-sm border px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                  !isTurn || count < 1
+                    ? 'cursor-not-allowed border-ink-2 text-muted/40'
+                    : active === c.id
+                      ? 'border-volt bg-volt text-ink'
+                      : 'border-volt bg-volt/10 text-volt hover:bg-volt hover:text-ink'
+                }`}
+              >
+                {active === c.id ? 'Seleccionando…' : 'Usar'}
+              </button>
+            </div>
+          )
+        })}
+        {turn && (
+          <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
+            → {turn === 'w' ? 'White' : 'Black'} to move
           </p>
         )}
-        {POWERS.map((p) => (
-          <div key={p.id} className="rounded-sm border border-ink bg-ink p-2.5">
-            <div className="flex items-center gap-2">
-              <span className="text-lg leading-none">{p.icon}</span>
-              <span className="font-mono text-[11px] uppercase tracking-wide text-volt">
-                {p.name}
-              </span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {(p.pieceTypes || []).length === 0 ? (
-                <span className="rounded-sm border border-ink-2 bg-ink-2 px-1.5 py-0.5 font-mono text-[10px] uppercase text-paper">
-                  any piece
-                </span>
-              ) : (
-                p.pieceTypes.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 rounded-sm border border-ink-2 bg-ink-2 px-1.5 py-0.5 font-mono text-[10px] uppercase text-paper"
-                  >
-                    <span className="text-sm leading-none">{TYPE_UNICODE[t]}</span>
-                    {PIECE_NAMES[t] || t}
-                  </span>
-                ))
-              )}
-            </div>
-            <p className="mt-1.5 text-[11px] leading-snug text-muted">{p.blurb}</p>
-          </div>
-        ))}
       </div>
     </aside>
   )
