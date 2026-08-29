@@ -9,6 +9,9 @@ import { sfx } from '../game/sound.js'
 import Stamp from './Stamp.jsx'
 import GameOver from './GameOver.jsx'
 import MountedPiece from './MountedPiece.jsx'
+import SpritePiece from './SpritePiece.jsx'
+import MountedSprite from './MountedSprite.jsx'
+import { spriteSrc } from './pieceSprites.js'
 import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
 
@@ -85,9 +88,22 @@ function buildSquareStyles(game, selected, activePower) {
   return styles
 }
 
+const PIECE_TYPES = ['k', 'q', 'r', 'b', 'n', 'p']
+
+function spritePieces(color) {
+  const pieces = {}
+  for (const type of PIECE_TYPES) {
+    const src = spriteSrc(color, type)
+    if (!src) continue
+    pieces[color + type.toUpperCase()] = () => <SpritePiece src={src} />
+  }
+  return pieces
+}
+
 const customPieces = {
+  ...spritePieces('b'),
   wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
-  bC: ({ squareWidth }) => <MountedPiece color="b" squareWidth={squareWidth} />,
+  bC: () => <MountedSprite color="b" />,
 }
 
 export default function GameScreen({ onMenu }) {
