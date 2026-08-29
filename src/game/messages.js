@@ -28,6 +28,13 @@ export const POT_LINES = [
   '🍲 Sopita... 4 piezas rivales quietas.',
 ]
 
+export const REVERSE_LINES = [
+  '🔄 ¡Reversa de UNO! Tablero y piezas volteados.',
+  'CARTA DE REVERSA! 🎴 Se vuelve todo como un UNO.',
+  '¡Reversa! 🔀 Todos cambian de bando.',
+  '🔁 ¡Switch! Ahora el otro lado tiene tus piezas.',
+]
+
 export const DISMOUNT_LINES = [
   'Dismount. Back to walking. 🚶',
   'The ride is over. Horses need breaks. 🐎',

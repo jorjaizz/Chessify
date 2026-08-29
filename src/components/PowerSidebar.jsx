@@ -6,7 +6,7 @@ const COLORS = [
   { id: 'b', label: 'Black', dot: 'bg-riot' },
 ]
 
-export default function PowerSidebar({ blocks = { w: 0, b: 0 }, turn = 'w', active = null, onUse }) {
+export default function PowerSidebar({ blocks = { w: 0, b: 0 }, reverses = { w: 0, b: 0 }, turn = 'w', active = null, onUse, onReverseUse }) {
   return (
     <div className="flex w-full flex-col gap-4">
       <aside className="w-full rounded-sm border-2 border-ink-2 bg-ink-2 lg:sticky lg:top-6 lg:w-56">
@@ -18,6 +18,7 @@ export default function PowerSidebar({ blocks = { w: 0, b: 0 }, turn = 'w', acti
           {COLORS.map((c) => {
             const isTurn = turn === c.id
             const count = blocks[c.id] || 0
+            const revCount = reverses[c.id] || 0
             return (
               <div
                 key={c.id}
@@ -55,6 +56,26 @@ export default function PowerSidebar({ blocks = { w: 0, b: 0 }, turn = 'w', acti
                 >
                   {active === c.id ? 'Seleccionando…' : 'Usar'}
                 </button>
+                <div className="mt-2 border-t border-ink-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-paper">
+                      <span className="reverse-dot">🔄</span>
+                      Reversa
+                    </span>
+                    <span className="font-mono text-sm text-volt">×{revCount}</span>
+                  </div>
+                  <button
+                    disabled={!isTurn || revCount < 1 || active !== null}
+                    onClick={onReverseUse}
+                    className={`mt-1.5 w-full rounded-sm border px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                      !isTurn || revCount < 1
+                        ? 'cursor-not-allowed border-ink-2 text-muted/40'
+                        : 'border-volt bg-volt/10 text-volt hover:bg-volt hover:text-ink'
+                    }`}
+                  >
+                    Voltear piezas y tablero
+                  </button>
+                </div>
               </div>
             )
           })}

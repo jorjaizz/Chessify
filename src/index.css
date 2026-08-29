@@ -91,6 +91,74 @@ body {
   }
 }
 
+/* carta reversible: aparece como un PNG en el tablero con brillo de "pala de PvZ" */
+.reverse-gem {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.reverse-gem-img {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 150, 0.95))
+    drop-shadow(0 0 18px rgba(255, 220, 60, 0.7));
+  animation: reverse-glow 1.2s ease-in-out infinite;
+}
+
+@keyframes reverse-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 6px rgba(255, 255, 150, 0.9))
+      drop-shadow(0 0 14px rgba(255, 220, 60, 0.6));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 1))
+      drop-shadow(0 0 26px rgba(255, 230, 90, 0.95));
+    transform: scale(1.14);
+  }
+}
+
+/* destello luminoso que sale al caer en la carta (estilo pala de PvZ) */
+.reverse-fx {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.reverse-fx-img {
+  width: 200%;
+  height: 200%;
+  max-width: 90px;
+  max-height: 90px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 1))
+    drop-shadow(0 0 30px rgba(255, 235, 90, 0.95));
+  animation: reverse-fx-pop 0.45s ease-out forwards;
+}
+
+@keyframes reverse-fx-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
 .gem-blocked {
   animation: gem-shake 0.5s ease-in-out infinite;
 }

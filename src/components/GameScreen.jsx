@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createInitialState, getMoves, applyMove, boardPosition, spawnGem, applyBlock, potBlockSquaresFrom, potAreaSquares } from '../game/engine.js'
-import { rcOf, squareName, GEM_INTERVAL_MS } from '../game/constants.js'
+import { createInitialState, getMoves, applyMove, boardPosition, spawnGem, spawnReverseGem, applyBlock, potBlockSquaresFrom, potAreaSquares } from '../game/engine.js'
+import { rcOf, squareName, GEM_INTERVAL_MS, REVERSE_INTERVAL_MS } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
 import Stamp from './Stamp.jsx'
@@ -15,6 +15,7 @@ import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
 import potGif from '../assets/sprites/BloqueoPiezas/Bloqueodeturno.gif'
 import potStatic from '../assets/sprites/BloqueoPiezas/Bloqueodeturnostatico.png'
+import reversePng from '../assets/sprites/SwitchPiezas/reverse.png'
 
 function useBoardWidth() {
   const ref = useRef(null)
@@ -119,11 +120,15 @@ export default function GameScreen({ onMenu }) {
   const [potColor, setPotColor] = useState(null)
   const [potOrigin, setPotOrigin] = useState(null)
   const [potHover, setPotHover] = useState(null)
+  const [orientation, setOrientation] = useState('white')
+  const [reverseFx, setReverseFx] = useState(null)
   const toastKey = useRef(0)
   const fxKey = useRef(0)
   const blockFxKey = useRef(0)
   const fxTimer = useRef(null)
   const blockTimer = useRef(null)
+  const reverseFxKey = useRef(0)
+  const reverseTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   function announce(events) {
@@ -147,11 +152,22 @@ export default function GameScreen({ onMenu }) {
       setMountFx({ to: move.to, color: game.turn, key: fxKey.current })
       fxTimer.current = setTimeout(() => setMountFx(null), 700)
     }
+    const landedOnReverse = !!game.reverseGem && move.to === game.reverseGem.square
+    const reverseSquare = landedOnReverse ? game.reverseGem.square : null
     const { state, events } = applyMove(game, move.from, move.to, move)
     setGame(state)
     announce(events)
     setSelected(null)
     setActivePower(null)
+    if (landedOnReverse && reverseSquare) {
+      clearTimeout(reverseTimer.current)
+      reverseFxKey.current += 1
+      setReverseFx({ square: reverseSquare, key: reverseFxKey.current })
+      reverseTimer.current = setTimeout(() => {
+        setOrientation((o) => (o === 'white' ? 'black' : 'white'))
+        setReverseFx(null)
+      }, 450)
+    }
     return true
   }
 
@@ -204,6 +220,18 @@ export default function GameScreen({ onMenu }) {
     sfx.click()
     setPotColor(color)
     setPotArmed(true)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function useReverse() {
+    if (game.winner || game.reverses[game.turn] < 1) return
+    sfx.click()
+    setGame((g) => ({
+      ...g,
+      reverses: { ...g.reverses, [g.turn]: Math.max(0, g.reverses[g.turn] - 1) },
+    }))
+    setOrientation((o) => (o === 'white' ? 'black' : 'white'))
     setSelected(null)
     setActivePower(null)
   }
@@ -286,8 +314,10 @@ export default function GameScreen({ onMenu }) {
     setToast(null)
     setMountFx(null)
     setBlockFx(null)
+    setReverseFx(null)
     clearTimeout(fxTimer.current)
     clearTimeout(blockTimer.current)
+    clearTimeout(reverseTimer.current)
     sfx.click()
   }
 
@@ -306,6 +336,22 @@ export default function GameScreen({ onMenu }) {
     }, GEM_INTERVAL_MS)
     return () => clearInterval(id)
   }, [game.winner, game.gem])
+
+  useEffect(() => {
+    if (game.winner || game.reverseGem) return
+    const id = setInterval(() => {
+      setGame((g) => {
+        if (g.winner || g.reverseGem) return g
+        const next = spawnReverseGem(g)
+        if (next !== g) {
+          toastKey.current += 1
+          setToast({ text: '🔄 Carta reversible sobre el tablero', kind: 'power', key: toastKey.current })
+        }
+        return next
+      })
+    }, REVERSE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [game.winner, game.reverseGem])
 
   const flashSquares = eligibleAbilities(game)
   const selectedAbilities = selected ? abilitiesFor(game, selected) : []
@@ -353,7 +399,7 @@ export default function GameScreen({ onMenu }) {
 
       <div className="flex w-full max-w-[1100px] flex-col items-center justify-center gap-4 lg:flex-row lg:items-start">
         <div className="order-2 w-full max-w-[560px] lg:order-1 lg:w-56">
-          <PowerSidebar blocks={game.blocks} turn={game.turn} active={potColor} onUse={armBlock} />
+          <PowerSidebar blocks={game.blocks} reverses={game.reverses} turn={game.turn} active={potColor} onUse={armBlock} onReverseUse={useReverse} />
         </div>
         <div className="order-1 flex w-full max-w-[560px] flex-col items-center gap-4 lg:order-2">
       <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
@@ -386,7 +432,7 @@ export default function GameScreen({ onMenu }) {
           <Chessboard
             id="chessify-board"
             position={boardPosition(game)}
-            boardOrientation="white"
+            boardOrientation={orientation}
             boardWidth={boardWidth}
             onPieceDrop={onPieceDrop}
             onPieceDragBegin={(piece, sourceSquare) => {
@@ -418,6 +464,32 @@ export default function GameScreen({ onMenu }) {
                 style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
               >
                 <span className="gem-ring">🍲</span>
+              </div>
+            )
+          })()}
+
+          {game.reverseGem && (() => {
+            const { r, c } = rcOf(game.reverseGem.square)
+            return (
+              <div
+                key={`reverse-${game.reverseGem.square}`}
+                className="reverse-gem"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+              >
+                <img src={reversePng} alt="" className="reverse-gem-img" />
+              </div>
+            )
+          })()}
+
+          {reverseFx && (() => {
+            const { r, c } = rcOf(reverseFx.square)
+            return (
+              <div
+                key={`reverse-fx-${reverseFx.key}`}
+                className="reverse-fx"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+              >
+                <img src={reversePng} alt="" className="reverse-fx-img" />
               </div>
             )
           })()}
