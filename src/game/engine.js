@@ -4,13 +4,15 @@ import {
   rcOf,
   pieceCode,
   pick,
+  findNearestEmptySquare,
   KNIGHT_DELTAS,
   BISHOP_DIRS,
   ROOK_DIRS,
   KING_DIRS,
 } from './constants.js'
 import { POWERS } from './powers.js'
-import { CAPTURE_LINES, POT_LINES } from './messages.js'
+
+import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES, POT_LINES } from './messages.js'
 
 const BACK_RANK = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
@@ -36,6 +38,7 @@ export function createInitialState() {
     winner: null,
     killer: null,
     mounted: new Set(),
+    mountedLeft: {},
     history: [],
     gem: null,
     locked: null,
@@ -143,6 +146,7 @@ export function getMoves(state, square) {
       let nc = c + dc
       while (isInBoard(nr, nc)) {
         const target = state.board[nr][nc]
+        if (target && target.color === me.color) break
         moves.push({
           from: square,
           to: squareName(nr, nc),
@@ -219,6 +223,7 @@ export function applyMove(inputState, from, to, move) {
     ...inputState,
     board: cloneBoard(inputState.board),
     mounted: new Set(inputState.mounted),
+    mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
     usedGems: new Set(inputState.usedGems),
     locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
@@ -229,45 +234,77 @@ export function applyMove(inputState, from, to, move) {
 
   const me = state.board[r][c]
   const target = state.board[tr][tc]
+  const wasMounted = state.mounted.has(from)
 
   const events = { messages: [], sounds: [] }
-  const wasMounted = state.mounted.has(from)
   let capturedKing = false
+  const isMerge = move.isPower && move.merge === true
 
   if (target) {
     capturedKing = target.type === 'k'
     if (capturedKing) {
       state.winner = me.color
       state.killer = { ...me, square: from }
-    } else {
+    } else if (!isMerge) {
       events.sounds.push('capture')
       if (!move.isPower) {
         events.messages.push({ text: pick(CAPTURE_LINES), kind: 'capture' })
       }
     }
     state.board[tr][tc] = null
+    state.mounted.delete(to)
+    delete state.mountedLeft[to]
   }
 
   state.board[tr][tc] = me
   state.board[r][c] = null
 
-  if (me.type === 'p' && (tr === 0 || tr === 7)) {
+  let promotedToQueen = false
+  if (me.type === 'p' && (tr === 0 || tr === 7) && !wasMounted && !isMerge) {
     state.board[tr][tc] = { type: 'q', color: me.color }
+    promotedToQueen = true
   }
 
   if (wasMounted || move.isPower) {
     state.mounted.delete(from)
-    state.mounted.add(to)
-  }
-
-  if (move.isPower) {
-    const power = POWERS.find((p) => p.id === move.powerId)
-    if (power && power.afterMove) {
-      power.afterMove(state, from, to, events)
+    const leftover = state.mountedLeft[from]
+    delete state.mountedLeft[from]
+    if (!promotedToQueen) state.mounted.add(to)
+    if (move.isPower) {
+      const power = POWERS.find((p) => p.id === move.powerId)
+      if (power && power.afterMove) {
+        power.afterMove(state, from, to, events)
+      }
+      events.sounds.push('power')
+    } else {
+      if (leftover && !promotedToQueen) state.mountedLeft[to] = leftover
     }
-    events.sounds.push('power')
   } else {
     events.sounds.push('move')
+  }
+
+  for (const sq of [...state.mounted]) {
+    if (move.isPower && sq === to) continue
+    const sr = rcOf(sq)
+    const cell = state.board[sr.r]?.[sr.c]
+    if (!cell || cell.color !== me.color) continue
+    const left = (state.mountedLeft[sq] ?? 0) - 1
+    if (left <= 0) {
+      const color = cell.color
+      state.mounted.delete(sq)
+      delete state.mountedLeft[sq]
+      state.board[sr.r][sr.c] = { type: 'n', color }
+      const eject = findNearestEmptySquare(state.board, sr.r, sr.c)
+      if (eject) {
+        const er = rcOf(eject)
+        state.board[er.r][er.c] =
+          er.r === 0 || er.r === 7 ? { type: 'q', color } : { type: 'p', color }
+      }
+      events.messages.push({ text: pick(DISMOUNT_LINES), kind: 'info' })
+      events.sounds.push('dismount')
+    } else {
+      state.mountedLeft[sq] = left
+    }
   }
 
   if (capturedKing) {
@@ -278,9 +315,10 @@ export function applyMove(inputState, from, to, move) {
     from,
     to,
     piece: { ...me },
-    captured: target ? { ...target } : null,
+    captured: target && !isMerge ? { ...target } : null,
     power: move.isPower ? move.powerId : null,
     capturedKing,
+    comment: events.messages.length > 0 ? events.messages[events.messages.length - 1].text : pick(MOVE_LINES),
   })
 
   state.turn = me.color === 'w' ? 'b' : 'w'

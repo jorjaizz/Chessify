@@ -9,6 +9,8 @@ import { sfx } from '../game/sound.js'
 import Stamp from './Stamp.jsx'
 import GameOver from './GameOver.jsx'
 import MountedPiece from './MountedPiece.jsx'
+import HistoryPanel from './HistoryPanel.jsx'
+import PowerSidebar from './PowerSidebar.jsx'
 
 function useBoardWidth() {
   const ref = useRef(null)
@@ -93,7 +95,10 @@ export default function GameScreen({ onMenu }) {
   const [selected, setSelected] = useState(null)
   const [activePower, setActivePower] = useState(null)
   const [toast, setToast] = useState(null)
+  const [mountFx, setMountFx] = useState(null)
   const toastKey = useRef(0)
+  const fxKey = useRef(0)
+  const fxTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   function announce(events) {
@@ -111,6 +116,12 @@ export default function GameScreen({ onMenu }) {
 
   function execute(move) {
     if (!move) return false
+    if (move.isPower && move.powerId === 'horseride') {
+      clearTimeout(fxTimer.current)
+      fxKey.current += 1
+      setMountFx({ to: move.to, color: game.turn, key: fxKey.current })
+      fxTimer.current = setTimeout(() => setMountFx(null), 700)
+    }
     const { state, events } = applyMove(game, move.from, move.to, move)
     setGame(state)
     announce(events)
@@ -164,6 +175,8 @@ export default function GameScreen({ onMenu }) {
     setSelected(null)
     setActivePower(null)
     setToast(null)
+    setMountFx(null)
+    clearTimeout(fxTimer.current)
     sfx.click()
   }
 
@@ -205,15 +218,17 @@ export default function GameScreen({ onMenu }) {
   return (
     <div className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
       <div className="flex w-full max-w-[560px] items-center justify-between font-mono text-xs uppercase tracking-widest">
-        <button
-          onClick={() => {
-            sfx.click()
-            onMenu()
-          }}
-          className="text-muted transition-colors hover:text-volt"
-        >
-          Chessify
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              sfx.click()
+              onMenu()
+            }}
+            className="text-muted transition-colors hover:text-volt"
+          >
+            Chessify
+          </button>
+        </div>
         <button
           onClick={reset}
           className="text-muted transition-colors hover:text-riot"
@@ -222,6 +237,11 @@ export default function GameScreen({ onMenu }) {
         </button>
       </div>
 
+      <div className="flex w-full max-w-[1100px] flex-col items-center justify-center gap-4 lg:flex-row lg:items-start">
+        <div className="order-2 w-full max-w-[560px] lg:order-1 lg:w-56">
+          <PowerSidebar />
+        </div>
+        <div className="order-1 flex w-full max-w-[560px] flex-col items-center gap-4 lg:order-2">
       <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
         {turnName ? (
           <>
@@ -305,6 +325,34 @@ export default function GameScreen({ onMenu }) {
             )
           })}
 
+          {Object.entries(game.mountedLeft || {}).map(([sq, n]) => {
+            const { r, c } = rcOf(sq)
+            return (
+              <span
+                key={sq}
+                className="mounted-badge"
+                style={{ left: `${c * 12.5 + 8.5}%`, top: `${r * 12.5 + 1.5}%` }}
+              >
+                ×{n}
+              </span>
+            )
+          })}
+
+          {mountFx &&
+            (() => {
+              const { r, c } = rcOf(mountFx.to)
+              return (
+                <span
+                  key={mountFx.key}
+                  className="mount-fx"
+                  style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
+                >
+                  <span className="fx-horse">🐴</span>
+                  <span className="fx-pawn">{mountFx.color === 'w' ? '♙' : '♟'}</span>
+                </span>
+              )
+            })()}
+
           <AnimatePresence>
             {(armedPower || selectedAbilities.length > 0) && selRC && (
               <div key="power-menu" className="pointer-events-auto absolute z-30" style={menuStyle}>
@@ -315,7 +363,7 @@ export default function GameScreen({ onMenu }) {
                   transition={{ duration: 0.12 }}
                 >
                   {armedPower ? (
-                    <div className="flex items-center gap-2 rounded-sm border-2 border-volt bg-ink-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-paper shadow-[3px_3px_0_rgba(0,0,0,0.4)]">
+                    <div className="flex w-max items-center gap-2 whitespace-nowrap rounded-sm border-2 border-volt bg-ink-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-paper shadow-[3px_3px_0_rgba(0,0,0,0.4)]">
                       <span>
                         {armedPower.icon} {armedPower.name} — pick a square
                       </span>
@@ -334,7 +382,7 @@ export default function GameScreen({ onMenu }) {
                           key={p.id}
                           onClick={() => armPower(p.id)}
                           title={p.blurb}
-                          className="rounded-sm border border-volt bg-ink-2 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-volt shadow-[2px_2px_0_rgba(0,0,0,0.35)] transition-colors hover:bg-volt hover:text-ink"
+                          className="w-max whitespace-nowrap rounded-sm border border-volt bg-ink-2 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-volt shadow-[2px_2px_0_rgba(0,0,0,0.35)] transition-colors hover:bg-volt hover:text-ink"
                         >
                           {p.icon} {p.name}
                         </button>
@@ -364,6 +412,12 @@ export default function GameScreen({ onMenu }) {
         <AnimatePresence mode="wait">
           {toast && <Stamp key={toast.key} text={toast.text} kind={toast.kind} />}
         </AnimatePresence>
+      </div>
+        </div>
+
+        <div className="order-3 w-full max-w-[560px] lg:order-3 lg:w-72">
+          <HistoryPanel entries={game.history} />
+        </div>
       </div>
     </div>
   )

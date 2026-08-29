@@ -26,7 +26,7 @@ const PAWN_PATH =
 export default function MountedPiece({ color }) {
   const fill = color === 'w' ? '#ffffff' : '#555555'
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }}>
       <svg viewBox="0 0 45 45" style={{ width: '100%', height: '100%', fill }}>
         <g style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
           {KNIGHT_PATHS}
@@ -36,10 +36,10 @@ export default function MountedPiece({ color }) {
         viewBox="0 0 45 45"
         style={{
           position: 'absolute',
-          top: '-16%',
-          left: '24%',
-          width: '52%',
-          height: '52%',
+          top: '10%',
+          left: '30%',
+          width: '40%',
+          height: '40%',
           fill,
           filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.6))',
         }}
