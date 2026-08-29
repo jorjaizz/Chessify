@@ -13,6 +13,8 @@ import MountedSprite from './MountedSprite.jsx'
 import { spriteSrc } from './pieceSprites.js'
 import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
+import potGif from '../assets/sprites/BloqueoPiezas/Bloqueodeturno.gif'
+import potStatic from '../assets/sprites/BloqueoPiezas/Bloqueodeturnostatico.png'
 
 function useBoardWidth() {
   const ref = useRef(null)
@@ -112,13 +114,16 @@ export default function GameScreen({ onMenu }) {
   const [activePower, setActivePower] = useState(null)
   const [toast, setToast] = useState(null)
   const [mountFx, setMountFx] = useState(null)
+  const [blockFx, setBlockFx] = useState(null)
   const [potArmed, setPotArmed] = useState(false)
   const [potColor, setPotColor] = useState(null)
   const [potOrigin, setPotOrigin] = useState(null)
   const [potHover, setPotHover] = useState(null)
   const toastKey = useRef(0)
   const fxKey = useRef(0)
+  const blockFxKey = useRef(0)
   const fxTimer = useRef(null)
+  const blockTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   function announce(events) {
@@ -225,7 +230,12 @@ export default function GameScreen({ onMenu }) {
   function confirmPotSquare(blockSquare) {
     if (!potOrigin || !blockSquare) return
     sfx.click()
+    const block = potBlockSquaresFrom(blockSquare)
     setGame((g) => applyBlock(g, blockSquare))
+    blockFxKey.current += 1
+    setBlockFx({ key: blockFxKey.current, block })
+    clearTimeout(blockTimer.current)
+    blockTimer.current = setTimeout(() => setBlockFx(null), 750)
     leaveBlockMode()
   }
 
@@ -275,7 +285,9 @@ export default function GameScreen({ onMenu }) {
     setPotHover(null)
     setToast(null)
     setMountFx(null)
+    setBlockFx(null)
     clearTimeout(fxTimer.current)
+    clearTimeout(blockTimer.current)
     sfx.click()
   }
 
@@ -410,17 +422,31 @@ export default function GameScreen({ onMenu }) {
             )
           })()}
 
-          {game.locked &&
-            [...game.locked.squares].map((sq) => {
-              const { r, c } = rcOf(sq)
-              return (
-                <div
-                  key={`locked-${sq}`}
-                  className="locked-cell"
-                  style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
-                />
-              )
-            })}
+          {game.locked && game.locked.block && game.locked.block.length === 4 && (() => {
+            const { r, c } = rcOf(game.locked.block[0])
+            return (
+              <div
+                key="locked-block"
+                className="locked-block"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '25%', height: '25%' }}
+              >
+                <img src={potStatic} alt="" className="locked-block-img" />
+              </div>
+            )
+          })()}
+
+          {blockFx && blockFx.block.length === 4 && (() => {
+            const { r, c } = rcOf(blockFx.block[0])
+            return (
+              <div
+                key={`blockfx-${blockFx.key}`}
+                className="block-drop"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '25%', height: '25%' }}
+              >
+                <img src={potGif} alt="" className="locked-block-img" />
+              </div>
+            )
+          })()}
 
           {potArea.map((sq) => {
             const { r, c } = rcOf(sq)
@@ -433,16 +459,17 @@ export default function GameScreen({ onMenu }) {
             )
           })}
 
-          {potPreview.map((sq) => {
-            const { r, c } = rcOf(sq)
+          {potOrigin && potBlockSquaresFrom(potHover).length === 4 && (() => {
+            const { r, c } = rcOf(potHover)
             return (
               <div
-                key={`preview-${sq}`}
-                className="locked-cell pot-preview"
-                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
-              />
+                className="pot-block"
+                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '25%', height: '25%' }}
+              >
+                <img src={potGif} alt="" className="pot-block-gif" />
+              </div>
             )
-          })}
+          })()}
 
           {potOrigin && (
             (() => {

@@ -111,11 +111,13 @@ export function applyBlock(inputState, blockSquare) {
     locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
   }
   const enemy = color === 'w' ? 'b' : 'w'
+  const blockSquares = potBlockSquaresFrom(blockSquare)
   const squares = potBlockPieces(state.board, enemy, blockSquare)
   state.blocks[color] -= 1
   state.locked = {
     owner: color,
     squares: new Set(squares),
+    block: blockSquares,
   }
   return state
 }
@@ -252,7 +254,9 @@ export function applyMove(inputState, from, to, move) {
     history: [...inputState.history],
     usedGems: new Set(inputState.usedGems),
     blocks: { ...inputState.blocks },
-    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
+    locked: inputState.locked
+      ? { ...inputState.locked, squares: new Set(inputState.locked.squares), block: inputState.locked.block ? [...inputState.locked.block] : null }
+      : null,
   }
 
   const { r, c } = rcOf(from)
