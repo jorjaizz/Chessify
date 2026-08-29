@@ -76,8 +76,7 @@ function buildSquareStyles(game, selected, activePower) {
       }
     } else {
       styles[m.to] = {
-        boxShadow: 'inset 0 0 0 2px rgba(237,234,225,0.55)',
-        backgroundColor: 'transparent',
+        background: 'radial-gradient(circle, rgba(138,141,148,0.85) 0 17%, transparent 18%)',
       }
     }
   }
@@ -125,7 +124,7 @@ export default function GameScreen({ onMenu }) {
     const all = getMoves(game, sourceSquare)
     const move = activePower && activePower.square === sourceSquare
       ? all.filter((m) => m.isPower && m.powerId === activePower.id).find((m) => m.to === targetSquare)
-      : all.find((m) => m.to === targetSquare)
+      : all.find((m) => m.to === targetSquare && !m.isPower)
     if (!move) return false
     return execute(move)
   }
@@ -172,6 +171,19 @@ export default function GameScreen({ onMenu }) {
   const styles = buildSquareStyles(game, selected, activePower)
   const turnName = game.winner ? null : game.turn === 'w' ? 'WHITE' : 'BLACK'
   const armedPower = activePower ? POWERS.find((p) => p.id === activePower.id) : null
+
+  const selRC = selected ? rcOf(selected) : null
+  const menuStyle = selRC
+    ? (() => {
+        const tx = selRC.c <= 1 ? '0%' : selRC.c >= 6 ? '-100%' : '-50%'
+        const ty = selRC.r <= 1 ? '16px' : 'calc(-100% - 10px)'
+        return {
+          left: `${(selRC.c + 0.5) * 12.5}%`,
+          top: `${(selRC.r + 0.5) * 12.5}%`,
+          transform: `translate(${tx}, ${ty})`,
+        }
+      })()
+    : null
 
   return (
     <div className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
@@ -248,6 +260,47 @@ export default function GameScreen({ onMenu }) {
               </span>
             )
           })}
+
+          <AnimatePresence>
+            {(armedPower || selectedAbilities.length > 0) && selRC && (
+              <div key="power-menu" className="pointer-events-auto absolute z-30" style={menuStyle}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 4 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  {armedPower ? (
+                    <div className="flex items-center gap-2 rounded-sm border-2 border-volt bg-ink-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-paper shadow-[3px_3px_0_rgba(0,0,0,0.4)]">
+                      <span>
+                        {armedPower.icon} {armedPower.name} — pick a square
+                      </span>
+                      <button
+                        onClick={() => setActivePower(null)}
+                        className="ml-1 leading-none text-muted transition-colors hover:text-riot"
+                        aria-label="Cancel"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start gap-1">
+                      {selectedAbilities.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => armPower(p.id)}
+                          title={p.blurb}
+                          className="rounded-sm border border-volt bg-ink-2 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-volt shadow-[2px_2px_0_rgba(0,0,0,0.35)] transition-colors hover:bg-volt hover:text-ink"
+                        >
+                          {p.icon} {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
         </div>
 
         <AnimatePresence>
@@ -268,50 +321,6 @@ export default function GameScreen({ onMenu }) {
           {toast && <Stamp key={toast.key} text={toast.text} kind={toast.kind} />}
         </AnimatePresence>
       </div>
-
-      <AnimatePresence>
-        {(armedPower || selectedAbilities.length > 0) && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            className="absolute left-1/2 top-24 z-20 w-72 -translate-x-1/2"
-          >
-            {armedPower ? (
-              <div className="flex items-center justify-between rounded-sm border-2 border-volt bg-ink-2 px-4 py-2.5">
-                <span className="font-mono text-xs uppercase tracking-wide text-paper">
-                  {armedPower.icon} {armedPower.name} — pick a highlighted square
-                </span>
-                <button
-                  onClick={() => setActivePower(null)}
-                  className="ml-3 font-mono text-xs uppercase text-muted hover:text-riot"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="rounded-sm border-2 border-ink-2 bg-ink-2 p-3">
-                <div className="font-mono text-[11px] font-semibold uppercase tracking-widest text-volt">
-                  Abilities
-                </div>
-                {selectedAbilities.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => armPower(p.id)}
-                    className="mt-2 flex w-full items-start gap-3 rounded-sm border border-ink bg-ink px-3 py-2 text-left transition-colors hover:border-volt"
-                  >
-                    <span className="text-lg leading-none">{p.icon}</span>
-                    <span className="min-w-0">
-                      <span className="block font-mono text-sm uppercase tracking-wide text-paper">{p.name}</span>
-                      <span className="block text-xs leading-relaxed text-muted">{p.blurb}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
