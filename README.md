@@ -7,16 +7,18 @@ Hot-seat chaos chess for the **Out of the box** hackathon track. There's no chec
 ## Play
 
 ```
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
+
+Move pieces by **drag & drop** **or** by **clicking** (piece → target square).
 
 ## Test the engine
 
 Pure logic, no browser needed:
 
 ```
-npm test
+pnpm test
 ```
 
 ## Stack

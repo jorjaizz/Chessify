@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
+import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createInitialState, getMoves, applyMove, boardPosition } from '../game/engine.js'
+import { rcOf } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
 import GameOver from './GameOver.jsx'
@@ -72,6 +74,22 @@ export default function GameScreen({ onMenu }) {
     return true
   }
 
+  function onSquareClick(square, piece) {
+    if (game.winner) return
+    if (selected && selected !== square) {
+      const move = getMoves(game, selected).find((m) => m.to === square)
+      if (move) {
+        const { state, events } = applyMove(game, selected, square, move)
+        setGame(state)
+        announce(events)
+        setSelected(null)
+        return
+      }
+    }
+    const cell = game.board[rcOf(square).r]?.[rcOf(square).c]
+    setSelected(cell && cell.color === game.turn ? square : null)
+  }
+
   function reset() {
     setGame(createInitialState())
     setSelected(null)
@@ -140,6 +158,8 @@ export default function GameScreen({ onMenu }) {
             onPieceDrop={onPieceDrop}
             onPieceDragBegin={(sourceSquare) => setSelected(sourceSquare)}
             onPieceDragEnd={() => setSelected(null)}
+            onSquareClick={onSquareClick}
+            customDndBackend={HTML5Backend}
             customSquareStyles={styles}
             customDarkSquareStyle={{ backgroundColor: '#1e1e2e' }}
             customLightSquareStyle={{ backgroundColor: '#e7e5e4' }}
