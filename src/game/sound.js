@@ -45,6 +45,13 @@ export const sfx = {
     tone({ freq: 240, endFreq: 660, dur: 0.16, type: 'sawtooth', vol: 0.14 })
     tone({ freq: 480, endFreq: 990, dur: 0.14, type: 'triangle', vol: 0.1, delay: 0.05 })
   },
+  neigh() {
+    tone({ freq: 700, endFreq: 1200, dur: 0.18, type: 'triangle', vol: 0.13 })
+    tone({ freq: 350, endFreq: 900, dur: 0.22, type: 'sawtooth', vol: 0.08, delay: 0.06 })
+  },
+  dismount() {
+    tone({ freq: 500, endFreq: 160, dur: 0.14, type: 'triangle', vol: 0.12 })
+  },
   victory() {
     const seq = [523, 659, 784, 1046, 1318]
     seq.forEach((f, i) => tone({ freq: f, dur: 0.16, type: 'triangle', vol: 0.14, delay: i * 0.09 }))

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { MENU_LINES, pickLine } from '../game/messages.js'
-import { POWERS } from '../game/powers.js'
 import { sfx } from '../game/sound.js'
+import PowerCatalog from './PowerCatalog.jsx'
 
 export default function Menu({ onPlay }) {
   const tagline = useMemo(() => pickLine(MENU_LINES), [])
@@ -50,22 +50,15 @@ export default function Menu({ onPlay }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="flex flex-col items-center gap-3"
+        className="w-full max-w-md"
       >
-        <p className="font-mono text-xs uppercase tracking-widest text-muted">
+        <div className="mb-2 text-center font-mono text-xs uppercase tracking-widest text-muted">
           Hot-seat · capture the King. Every piece has its own way.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {POWERS.map((p) => (
-            <span
-              key={p.id}
-              title={p.blurb}
-              className="rounded-sm border border-ink-2 bg-ink-2 px-3 py-1 font-mono text-xs uppercase tracking-wide text-paper"
-            >
-              {p.icon} {p.name}
-            </span>
-          ))}
         </div>
+        <div className="mb-3 text-center font-mono text-sm uppercase tracking-widest text-volt">
+          Abilities
+        </div>
+        <PowerCatalog />
       </motion.div>
     </div>
   )
