@@ -8,50 +8,60 @@ export default function Menu({ onPlay }) {
   const tagline = useMemo(() => pickLine(MENU_LINES), [])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-6 text-center">
-      <motion.h1
-        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="title-neon text-7xl font-black tracking-tighter text-neon md:text-9xl"
-      >
-        CHESSIFY
-      </motion.h1>
-
-      <motion.p
+    <div className="grain-bg flex min-h-screen flex-col items-center justify-center gap-8 bg-ink px-6 text-center">
+      <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="max-w-md text-lg text-bone/80"
+        transition={{ duration: 0.4 }}
+        className="relative"
+      >
+        <h1 className="font-display text-7xl uppercase tracking-tight text-paper md:text-9xl">
+          CHESS<span className="text-volt">IFY</span>
+        </h1>
+        <span className="absolute -right-3 -top-3 rotate-12 rounded-sm border-2 border-riot px-2 py-0.5 font-mono text-[10px] uppercase text-riot">
+          no rules
+        </span>
+      </motion.div>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="max-w-md font-mono text-sm uppercase tracking-wide text-muted"
       >
         {tagline}
       </motion.p>
 
       <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        whileHover={{ scale: 1.06 }}
-        whileTap={{ scale: 0.95 }}
+        initial={{ opacity: 0, rotate: -2 }}
+        animate={{ opacity: 1, rotate: -2 }}
+        whileHover={{ rotate: 0, scale: 1.03 }}
+        transition={{ delay: 0.2 }}
         onClick={() => {
           sfx.click()
           onPlay()
         }}
-        className="rounded-xl border-2 border-neon bg-neon/10 px-10 py-4 text-2xl font-black tracking-widest text-neon shadow-[0_0_30px_-5px_rgba(34,211,238,0.8)] transition-colors hover:bg-neon hover:text-ink"
+        className="rounded-sm border-[3px] border-volt bg-volt px-12 py-3 font-display text-2xl uppercase tracking-wide text-ink shadow-[6px_6px_0_rgba(198,255,61,0.25)] transition-colors hover:bg-ink hover:text-volt"
       >
-        ▶ PLAY
+        Play
       </motion.button>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="flex flex-col items-center gap-3 text-sm text-bone/50"
+        transition={{ delay: 0.3 }}
+        className="flex flex-col items-center gap-3"
       >
-        <p>Hot-seat · capture the King. Every piece kills its own way.</p>
+        <p className="font-mono text-xs uppercase tracking-widest text-muted">
+          Hot-seat · capture the King. Every piece has its own way.
+        </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           {POWERS.map((p) => (
-            <span key={p.id} title={p.blurb} className="rounded-full border border-bone/15 px-3 py-1 text-bone/70">
+            <span
+              key={p.id}
+              title={p.blurb}
+              className="rounded-sm border border-ink-2 bg-ink-2 px-3 py-1 font-mono text-xs uppercase tracking-wide text-paper"
+            >
               {p.icon} {p.name}
             </span>
           ))}

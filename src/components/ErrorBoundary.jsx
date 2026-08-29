@@ -13,17 +13,17 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="grain-bg flex min-h-screen flex-col items-center justify-center gap-4 bg-ink px-6 text-center">
           <div className="text-6xl">⚠️</div>
-          <h1 className="text-3xl font-black text-crimson">SOMETHING EXPLODED</h1>
-          <pre className="max-w-xl overflow-auto rounded-lg bg-black/40 p-4 text-left text-sm text-crimson/90">
+          <h1 className="font-display text-4xl uppercase tracking-wide text-riot">Something exploded</h1>
+          <pre className="max-w-xl overflow-auto rounded-sm border-2 border-riot/50 bg-ink-2 p-4 text-left text-sm text-riot/90">
             {String(this.state.error && this.state.error.stack || String(this.state.error && this.state.error.message))}
           </pre>
           <button
             onClick={() => window.location.reload()}
-            className="rounded-lg border-2 border-neon bg-neon/10 px-6 py-2 font-bold text-neon hover:bg-neon hover:text-ink"
+            className="rounded-sm border-2 border-volt bg-volt px-6 py-2 font-mono text-xs font-semibold uppercase tracking-wide text-ink transition-colors hover:bg-ink hover:text-volt"
           >
-            RELOAD
+            Reload
           </button>
         </div>
       )

@@ -5,12 +5,14 @@ let state = createInitialState()
 
 {
   const e2 = getMoves(state, 'e2')
-  const base = e2.filter((m) => !m.isPower)
-  const power = e2.filter((m) => m.isPower)
-  assert.equal(base.length, 2, 'e2 pawn should have 2 standard moves')
-  assert.ok(base.some((m) => m.to === 'e4'), 'double step to e4')
-  assert.ok(power.length > 0, 'e2 is adjacent to the g1 knight, so HORSE RIDE applies')
-  assert.ok(power.some((m) => m.to === 'c3') && power.some((m) => m.to === 'g3'), 'knight jumps from e2')
+  assert.ok(!e2.some((m) => m.isPower), 'center pawn e2 has no knight touching it at start')
+  const b2 = getMoves(state, 'b2')
+  const base = b2.filter((m) => !m.isPower)
+  const power = b2.filter((m) => m.isPower)
+  assert.equal(base.length, 2, 'b2 pawn should have 2 standard moves')
+  assert.ok(base.some((m) => m.to === 'b4'), 'double step to b4')
+  assert.ok(power.length > 0, 'b2 touches the b1 knight, so HORSE RIDE applies')
+  assert.ok(power.some((m) => m.to === 'a4') && power.some((m) => m.to === 'c4'), 'knight jumps from b2')
 }
 
 {
@@ -28,7 +30,7 @@ let state = createInitialState()
 {
   state = createInitialState()
   state.board[4][3] = { type: 'p', color: 'w' }
-  state.board[2][2] = { type: 'n', color: 'w' }
+  state.board[3][3] = { type: 'n', color: 'w' }
   const moves = getMoves(state, 'd4')
   const knightMoves = moves.filter((m) => m.isPower)
   assert.ok(knightMoves.length > 0, `horse ride should enable knight moves, got ${moves.length}`)
@@ -48,7 +50,8 @@ let state = createInitialState()
   assert.ok(state.mounted.has('e6'), 'setup for black turn')
   state = { ...state, turn: 'w' }
   const moves = getMoves(state, 'e6')
-  assert.ok(moves.some((m) => m.isPower), 'mounted pawn keeps knight moves')
+  assert.ok(moves.some((m) => m.to === 'g7') || moves.some((m) => m.to === 'f4'), 'mounted pawn keeps knight moves forever (now normal moves)')
+  assert.ok(!moves.some((m) => m.isPower), 'mounted pawn rides without needing the ability menu')
 }
 
 {

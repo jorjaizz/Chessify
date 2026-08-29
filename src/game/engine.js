@@ -45,7 +45,15 @@ export function boardPosition(state) {
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const p = state.board[r][c]
-      if (p) pos[squareName(r, c)] = pieceCode(p)
+      if (p) {
+        const sq = squareName(r, c)
+        pos[sq] =
+          p.type === 'p' && state.mounted.has(sq)
+            ? p.color === 'w'
+              ? 'wC'
+              : 'bC'
+            : pieceCode(p)
+      }
     }
   }
   return pos
@@ -114,6 +122,22 @@ export function getMoves(state, square) {
       const target = state.board[nr][nc]
       if (target && target.color !== me.color) {
         moves.push({ from: square, to: squareName(nr, nc), capture: true })
+      }
+    }
+    if (state.mounted.has(square)) {
+      for (const [dr, dc] of KNIGHT_DELTAS) {
+        const nr = r + dr
+        const nc = c + dc
+        if (!isInBoard(nr, nc)) continue
+        const target = state.board[nr][nc]
+        if (target && target.color === me.color) continue
+        moves.push({
+          from: square,
+          to: squareName(nr, nc),
+          capture: !!target,
+          isPower: false,
+          powerId: null,
+        })
       }
     }
   } else if (me.type === 'n') {

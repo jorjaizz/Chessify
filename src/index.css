@@ -1,14 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-neon: #22d3ee;
-  --color-crimson: #fb4d6d;
-  --color-bone: #e7e5e4;
-  --color-ink: #0a0a0f;
-}
+  --color-ink: #16171b;
+  --color-ink-2: #1e2025;
+  --color-paper: #edeae1;
+  --color-riot: #ff3366;
+  --color-volt: #c6ff3d;
+  --color-muted: #8a8d94;
 
-* {
-  box-sizing: border-box;
+  --font-display: "Anton", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
 }
 
 html,
@@ -19,33 +22,44 @@ body,
 }
 
 body {
-  background: radial-gradient(1200px 700px at 50% -10%, #14141f 0%, #0a0a0f 55%, #050508 100%);
-  color: var(--color-bone);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-color: #16171b;
+  color: #edeae1;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-@keyframes neon-flicker {
-  0%, 100% { opacity: 1; text-shadow: 0 0 18px rgba(34, 211, 238, 0.55), 0 0 60px rgba(34, 211, 238, 0.25); }
-  92% { opacity: 1; }
-  93% { opacity: 0.6; text-shadow: 0 0 4px rgba(34, 211, 238, 0.2); }
-  94% { opacity: 1; }
-  97% { opacity: 0.85; }
-  98% { opacity: 1; }
+/* textura sutil de grano sobre el fondo oscuro */
+.grain-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 3px 3px;
 }
 
-.title-neon {
-  animation: neon-flicker 4s linear infinite;
+/* anillo pulsante sobre casillas con habilidad disponible */
+.ability-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
-@keyframes kill-pulse {
-  0% { transform: scale(0.86); opacity: 0; }
-  20% { transform: scale(1.04); opacity: 1; }
-  38% { transform: scale(0.98); }
-  55% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+.ability-ring {
+  width: 34%;
+  height: 34%;
+  border-radius: 9999px;
+  border: 2px solid #c6ff3d;
+  opacity: 0.85;
+  animation: pulse-ring 1.6s ease-in-out infinite;
 }
 
-.kill-pulse {
-  animation: kill-pulse 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+@keyframes pulse-ring {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }

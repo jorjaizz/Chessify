@@ -6,11 +6,12 @@ export const POWERS = [
     id: 'horseride',
     name: 'HORSE RIDE',
     icon: '🤠',
-    blurb: 'A pawn adjacent to an allied knight mounts up and moves like a knight forever.',
+    blurb:
+      'A pawn touching an allied knight mounts it and moves like a knight forever (shown riding the horse).',
     canUse(state, square, me) {
       if (!me || me.type !== 'p') return false
       if (me.color !== state.turn) return false
-      if (state.mounted.has(square)) return true
+      if (state.mounted.has(square)) return false
       const { r, c } = rcOf(square)
       return hasAllyKnightAdjacent(state.board, r, c, me.color)
     },

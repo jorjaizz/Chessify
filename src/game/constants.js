@@ -67,7 +67,7 @@ export function findByCode(board, code) {
 }
 
 export function hasAllyKnightAdjacent(board, r, c, color) {
-  for (const [dr, dc] of KNIGHT_DELTAS) {
+  for (const [dr, dc] of ROOK_DIRS) {
     const nr = r + dr
     const nc = c + dc
     if (!isInBoard(nr, nc)) continue
