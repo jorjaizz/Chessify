@@ -12,7 +12,7 @@ import {
 } from './constants.js'
 import { POWERS } from './powers.js'
 
-import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES, POT_LINES } from './messages.js'
+import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES, POT_LINES, REVERSE_LINES } from './messages.js'
 
 const BACK_RANK = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
@@ -42,7 +42,11 @@ export function createInitialState() {
     history: [],
     gem: null,
     locked: null,
+    blocks: { w: 0, b: 0 },
+    reverses: { w: 0, b: 0 },
+    reverseGem: null,
     usedGems: new Set(),
+    usedReverseGems: new Set(),
   }
 }
 
@@ -67,32 +71,114 @@ export function spawnGem(inputState) {
   return state
 }
 
-function pickLockedSquares(board, color) {
-  let bestCount = 0
-  const bestBlocks = []
-  for (let r = 0; r <= 6; r++) {
-    for (let c = 0; c <= 6; c++) {
-      const block = [
-        squareName(r, c),
-        squareName(r, c + 1),
-        squareName(r + 1, c),
-        squareName(r + 1, c + 1),
-      ]
-      const occupied = block.filter((sq) => {
-        const { r: br, c: bc } = rcOf(sq)
-        return board[br][bc] && board[br][bc].color === color
-      })
-      if (occupied.length > bestCount) {
-        bestCount = occupied.length
-        bestBlocks.length = 0
-        bestBlocks.push(occupied)
-      } else if (occupied.length === bestCount && occupied.length > 0) {
-        bestBlocks.push(occupied)
-      }
+function placeReverseGem(state) {
+  const empty = []
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (!state.board[r][c]) empty.push(squareName(r, c))
     }
   }
-  if (bestBlocks.length === 0) return []
-  return pick(bestBlocks)
+  if (empty.length === 0) return
+  const busy = []
+  if (state.gem) busy.push(state.gem.square)
+  if (state.reverseGem) busy.push(state.reverseGem.square)
+  const candidates = empty.filter((s) => !busy.includes(s) && !state.usedReverseGems.has(s))
+  const sq = pick(candidates.length ? candidates : empty)
+  state.reverseGem = { square: sq, owner: state.turn }
+  state.usedReverseGems.add(sq)
+}
+
+export function spawnReverseGem(inputState) {
+  if (inputState.reverseGem || inputState.winner) return inputState
+  const state = { ...inputState, usedReverseGems: new Set(inputState.usedReverseGems) }
+  placeReverseGem(state)
+  return state
+}
+
+export function potBlockSquaresFrom(blockSquare) {
+  const { r, c } = rcOf(blockSquare)
+  const out = []
+  for (let dr = 0; dr <= 1; dr++) {
+    for (let dc = 0; dc <= 1; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
+    }
+  }
+  return out
+}
+
+function potBlockPieces(board, color, blockSquare) {
+  return potBlockSquaresFrom(blockSquare).filter((sq) => {
+    const { r: br, c: bc } = rcOf(sq)
+    return board[br] && board[br][bc] && board[br][bc].color === color
+  })
+}
+
+// área 9x9 de casillas alrededor de la olla donde se puede deslizar el bloque 2x2
+export function potAreaSquares(origin) {
+  const { r, c } = rcOf(origin)
+  const out = []
+  for (let dr = -4; dr <= 4; dr++) {
+    for (let dc = -4; dc <= 4; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
+    }
+  }
+  return out
+}
+
+export function applyBlock(inputState, blockSquare) {
+  const color = inputState.turn
+  if (inputState.blocks[color] < 1 || !blockSquare) return inputState
+  const state = {
+    ...inputState,
+    blocks: { ...inputState.blocks },
+    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
+  }
+  const enemy = color === 'w' ? 'b' : 'w'
+  const blockSquares = potBlockSquaresFrom(blockSquare)
+  const squares = potBlockPieces(state.board, enemy, blockSquare)
+  state.blocks[color] -= 1
+  state.locked = {
+    owner: color,
+    squares: new Set(squares),
+    block: blockSquares,
+  }
+  return state
+}
+
+export function applyReverse(inputState, force = false) {
+  const color = inputState.turn
+  if (!force && inputState.reverses[color] < 1) return inputState
+  const board = inputState.board.map((row) =>
+    row.map((cell) => (cell ? { ...cell, color: cell.color === 'w' ? 'b' : 'w' } : null))
+  )
+  const mounted = new Set(inputState.mounted)
+  const mountedLeft = { ...inputState.mountedLeft }
+  const locked = inputState.locked
+    ? {
+        ...inputState.locked,
+        owner: inputState.locked.owner === 'w' ? 'b' : 'w',
+        squares: new Set(inputState.locked.squares),
+        block: inputState.locked.block ? [...inputState.locked.block] : null,
+      }
+    : null
+  const reverses = { w: inputState.reverses.w, b: inputState.reverses.b }
+  reverses[color] = Math.max(0, reverses[color] - 1)
+  const swappedReverses = { w: reverses.b, b: reverses.w }
+  const swappedBlocks = { w: inputState.blocks.b, b: inputState.blocks.w }
+  return {
+    ...inputState,
+    board,
+    mounted,
+    mountedLeft,
+    locked,
+    reverses: swappedReverses,
+    blocks: swappedBlocks,
+    reversed: !inputState.reversed,
+  }
 }
 
 export function boardPosition(state) {
@@ -227,7 +313,12 @@ export function applyMove(inputState, from, to, move) {
     mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
     usedGems: new Set(inputState.usedGems),
-    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
+    usedReverseGems: new Set(inputState.usedReverseGems),
+    blocks: { ...inputState.blocks },
+    reverses: { ...inputState.reverses },
+    locked: inputState.locked
+      ? { ...inputState.locked, squares: new Set(inputState.locked.squares), block: inputState.locked.block ? [...inputState.locked.block] : null }
+      : null,
   }
 
   const { r, c } = rcOf(from)
@@ -322,17 +413,19 @@ export function applyMove(inputState, from, to, move) {
     comment: events.messages.length > 0 ? events.messages[events.messages.length - 1].text : pick(MOVE_LINES),
   })
 
-  state.turn = me.color === 'w' ? 'b' : 'w'
-
   if (state.gem && to === state.gem.square) {
     events.messages.push({ text: pick(POT_LINES), kind: 'power' })
     events.sounds.push('power')
-    state.locked = {
-      owner: me.color,
-      squares: new Set(pickLockedSquares(state.board, state.turn)),
-    }
+    state.blocks[me.color] = (state.blocks[me.color] || 0) + 1
     state.gem = null
   }
+  if (state.reverseGem && to === state.reverseGem.square) {
+    events.messages.push({ text: pick(REVERSE_LINES), kind: 'power' })
+    events.sounds.push('power')
+    state.reverses[me.color] = (state.reverses[me.color] || 0) + 1
+    state.reverseGem = null
+  }
+  state.turn = me.color === 'w' ? 'b' : 'w'
 
   if (state.locked && state.locked.owner === state.turn) {
     state.locked = null

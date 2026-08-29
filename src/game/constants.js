@@ -2,7 +2,10 @@ export const FILES = 'abcdefgh'
 export const RANKS = '87654321'
 
 // Cada cuántos milisegundos aparece el cuadrado especial (la OLLA) en el tablero.
-export const GEM_INTERVAL_MS = 30000
+export const GEM_INTERVAL_MS = 60000
+
+// Cada cuántos milisegundos aparece la carta reversible (canjeable) en el tablero.
+export const REVERSE_INTERVAL_MS = 30000
 
 export const KNIGHT_DELTAS = [
   [-2, -1],
