@@ -39,6 +39,7 @@ export function createInitialState() {
     mounted: new Set(),
     mountedLeft: {},
     history: [],
+    powerUsed: new Map(), // Track which pieces have used which powers: square -> powerId
   }
 }
 
@@ -171,6 +172,7 @@ export function applyMove(inputState, from, to, move) {
     mounted: new Set(inputState.mounted),
     mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
+    powerUsed: new Map(inputState.powerUsed), // Clone the powerUsed map
   }
 
   const { r, c } = rcOf(from)
@@ -219,14 +221,48 @@ export function applyMove(inputState, from, to, move) {
     if (move.isPower) {
       const power = POWERS.find((p) => p.id === move.powerId)
       if (power && power.afterMove) {
-        power.afterMove(state, from, to, events)
+        power.afterMove(state, from, to, events, me)
       }
+      // Track that this piece used a power at its new location
+      state.powerUsed.set(to, move.powerId)
       events.sounds.push('power')
     } else {
       if (leftover && !promotedToQueen) state.mountedLeft[to] = leftover
     }
   } else {
     events.sounds.push('move')
+  }
+
+  // Check if a king was captured by a power move (e.g., faithful_prayer)
+  if (move.isPower && !capturedKing) {
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = state.board[r][c]
+        if (piece && piece.type === 'k' && piece.color !== me.color) {
+          // King is still on the board, no capture by power
+          continue
+        }
+      }
+    }
+    // Check if enemy king is missing
+    const enemyColor = me.color === 'w' ? 'b' : 'w'
+    let enemyKingFound = false
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = state.board[r][c]
+        if (piece && piece.type === 'k' && piece.color === enemyColor) {
+          enemyKingFound = true
+          break
+        }
+      }
+      if (enemyKingFound) break
+    }
+    if (!enemyKingFound) {
+      capturedKing = true
+      state.winner = me.color
+      state.killer = { ...me, square: from }
+      events.sounds.push('victory')
+    }
   }
 
   for (const sq of [...state.mounted]) {

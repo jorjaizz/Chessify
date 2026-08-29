@@ -105,3 +105,33 @@ export function killLineFor(type) {
 export function pickLine(arr) {
   return pick(arr)
 }
+
+export const PRAYER_LINES = {
+  success: [
+    'The Almighty listens. ⛪⚡',
+    'Divine intervention. 🙏✨',
+    'God works in mysterious ways. 🎲⚡',
+    'A miracle occurred. 💫',
+    'The heavens responded. ⛈️',
+    'Faith rewarded. ✨🙏',
+    'Holy wrath unleashed. ⚡😤',
+    'The prayer was answered. 🕯️',
+  ],
+  fail: [
+    'Silence from above. 🙏😐',
+    'The prayer goes unanswered. 😔',
+    'Divine silence today. 🤐',
+    'No miracles this time. 💭',
+    'God has other plans. 🤷',
+  ],
+}
+
+export const ROOK_SKIP_LINES = [
+  'Leap of faith! 🏗️✨',
+  'Overcomplicated. 🤔',
+  'The tower hops! 🐰',
+  'Skip ahead. 📍',
+  'Unblocked trajectory. 🎯',
+  'Tower teleport. 🪟',
+  'Jumping the line. 😤',
+]

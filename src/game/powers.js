@@ -1,5 +1,5 @@
-import { ROOK_DIRS, KING_DIRS, KNIGHT_DELTAS, isInBoard, squareName, rcOf, hasAllyKnightAdjacent, pick } from './constants.js'
-import { HORSE_LINES, KICK_LINES } from './messages.js'
+import { ROOK_DIRS, KING_DIRS, KNIGHT_DELTAS, BISHOP_DIRS, isInBoard, squareName, rcOf, hasAllyKnightAdjacent, pick } from './constants.js'
+import { HORSE_LINES, KICK_LINES, PRAYER_LINES, ROOK_SKIP_LINES } from './messages.js'
 
 const KICK_AREA = [...KING_DIRS, ...KNIGHT_DELTAS]
 
@@ -48,7 +48,7 @@ export const POWERS = [
       }
       return out
     },
-    afterMove(state, from, to, events) {
+    afterMove(state, from, to, events, me) {
       state.mountedLeft[to] = 2
       events.sounds.push('neigh')
       events.messages.push({ text: pick(HORSE_LINES), kind: 'power' })
@@ -97,9 +97,142 @@ export const POWERS = [
       }
       return out
     },
-    afterMove(state, from, to, events) {
+    afterMove(state, from, to, events, me) {
       events.sounds.push('neigh')
       events.messages.push({ text: pick(KICK_LINES), kind: 'power' })
+      return events
+    },
+  },
+  {
+    id: 'faithful_prayer',
+    name: 'FAITHFUL PRAYER',
+    icon: '🙏',
+    pieceTypes: ['b'],
+    blurb:
+      'A bishop prays in secret for divine intervention. With a low chance, God answers with holy wrath, striking down a random enemy piece.',
+    details:
+      'Click an eligible bishop, grab the PRAYER pill and drop it onto any enemy piece. The bishop prays... and by divine chance, might invoke the wrath of the Almighty. Only a random enemy piece knows the truth.',
+    invocationChance: 0.15, // 15% chance (modifiable for testing)
+    canUse(state, square, me) {
+      if (!me || me.type !== 'b') return false
+      if (me.color !== state.turn) return false
+      return this.getMoves(state, square, me).length > 0
+    },
+    getMoves(state, square, me) {
+      if (!me || me.type !== 'b') return []
+      if (me.color !== state.turn) return []
+      const { r, c } = rcOf(square)
+      const out = []
+      for (const [dr, dc] of BISHOP_DIRS) {
+        let nr = r + dr
+        let nc = c + dc
+        while (isInBoard(nr, nc)) {
+          const target = state.board[nr][nc]
+          if (target && target.color === me.color) break
+          if (target && target.color !== me.color) {
+            out.push({
+              from: square,
+              to: squareName(nr, nc),
+              capture: true,
+              isPower: true,
+              powerId: this.id,
+              prayerTarget: squareName(nr, nc),
+            })
+          }
+          if (target) break
+          nr += dr
+          nc += dc
+        }
+      }
+      return out
+    },
+    afterMove(state, from, to, events, me) {
+      // Collect all enemy pieces
+      const enemies = []
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = state.board[r][c]
+          if (piece && piece.color !== me.color) {
+            enemies.push(squareName(r, c))
+          }
+        }
+      }
+
+      // Determine if prayer succeeds
+      const prayerSucceeds = Math.random() < this.invocationChance
+      
+      if (prayerSucceeds && enemies.length > 0) {
+        // Strike down a random enemy piece
+        const victimSquare = pick(enemies)
+        const { r: vr, c: vc } = rcOf(victimSquare)
+        state.board[vr][vc] = null
+        state.mounted.delete(victimSquare)
+        delete state.mountedLeft[victimSquare]
+        
+        events.sounds.push('capture')
+        events.messages.push({ text: pick(PRAYER_LINES.success), kind: 'power' })
+      } else {
+        events.messages.push({ text: pick(PRAYER_LINES.fail), kind: 'power' })
+      }
+      
+      return events
+    },
+  },
+  {
+    id: 'rook_skip',
+    name: 'ROOK SKIP',
+    icon: '⬆️',
+    pieceTypes: ['r'],
+    blurb:
+      'A rook leaps over an allied piece blocking its path, unlocking new movement possibilities and tactical options.',
+    details:
+      'Click an eligible rook, grab the SKIP pill and drop it onto the empty square beyond an allied piece. The rook gracefully hops over its ally, continuing its assault beyond.',
+    canUse(state, square, me) {
+      if (!me || me.type !== 'r') return false
+      if (me.color !== state.turn) return false
+      return this.getMoves(state, square, me).length > 0
+    },
+    getMoves(state, square, me) {
+      if (!me || me.type !== 'r') return []
+      if (me.color !== state.turn) return []
+      const { r, c } = rcOf(square)
+      const out = []
+      for (const [dr, dc] of ROOK_DIRS) {
+        let nr = r + dr
+        let nc = c + dc
+        let foundAlly = false
+        while (isInBoard(nr, nc)) {
+          const target = state.board[nr][nc]
+          if (target && target.color === me.color && !foundAlly) {
+            // Found an ally - skip it and continue
+            foundAlly = true
+            nr += dr
+            nc += dc
+            continue
+          }
+          if (foundAlly) {
+            // After ally, check if we can land here
+            if (!target || target.color !== me.color) {
+              out.push({
+                from: square,
+                to: squareName(nr, nc),
+                capture: !!target,
+                isPower: true,
+                powerId: this.id,
+              })
+            }
+            if (target && target.color === me.color) break
+            if (target) break
+          }
+          nr += dr
+          nc += dc
+        }
+      }
+      return out
+    },
+    afterMove(state, from, to, events, me) {
+      events.sounds.push('power')
+      events.messages.push({ text: pick(ROOK_SKIP_LINES), kind: 'power' })
       return events
     },
   },

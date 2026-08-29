@@ -11,7 +11,7 @@ import GameOver from './GameOver.jsx'
 import MountedPiece from './MountedPiece.jsx'
 import SpritePiece from './SpritePiece.jsx'
 import MountedSprite from './MountedSprite.jsx'
-import { spriteSrc } from './pieceSprites.js'
+import { spriteSrc, spriteWithPower } from './pieceSprites.js'
 import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
 
@@ -102,20 +102,26 @@ function buildSquareStyles(game, selected, activePower) {
 
 const PIECE_TYPES = ['k', 'q', 'r', 'b', 'n', 'p']
 
-function spritePieces(color) {
-  const pieces = {}
-  for (const type of PIECE_TYPES) {
-    const src = spriteSrc(color, type)
-    if (!src) continue
-    pieces[color + type.toUpperCase()] = () => <SpritePiece src={src} />
+function PoweredSpritePiece({ type, color, game }) {
+  // Find which square this piece is on
+  let square = null
+  let countFound = 0
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = game.board[r][c]
+      if (piece && piece.type === type && piece.color === color) {
+        if (countFound === 0) {
+          square = squareName(r, c)
+        }
+        countFound++
+      }
+    }
   }
-  return pieces
-}
-
-const customPieces = {
-  ...spritePieces('b'),
-  wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
-  bC: () => <MountedSprite color="b" />,
+  
+  const powerId = square ? game.powerUsed.get(square) : null
+  const src = spriteWithPower(color, type, powerId) || spriteSrc(color, type)
+  
+  return <SpritePiece src={src} />
 }
 
 export default function GameScreen({ onMenu }) {
@@ -131,6 +137,18 @@ export default function GameScreen({ onMenu }) {
   const kickKey = useRef(0)
   const kickTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
+
+  // Build custom pieces with power-activated sprite variants
+  const customPieces = {
+    bK: () => <PoweredSpritePiece type="k" color="b" game={game} />,
+    bQ: () => <PoweredSpritePiece type="q" color="b" game={game} />,
+    bR: () => <PoweredSpritePiece type="r" color="b" game={game} />,
+    bB: () => <PoweredSpritePiece type="b" color="b" game={game} />,
+    bN: () => <PoweredSpritePiece type="n" color="b" game={game} />,
+    bP: () => <PoweredSpritePiece type="p" color="b" game={game} />,
+    wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
+    bC: () => <MountedSprite color="b" />,
+  }
 
   function announce(events) {
     if (!events) return
