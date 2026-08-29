@@ -11,7 +11,8 @@ import {
   KING_DIRS,
 } from './constants.js'
 import { POWERS } from './powers.js'
-import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES } from './messages.js'
+
+import { CAPTURE_LINES, DISMOUNT_LINES, MOVE_LINES, POT_LINES, REVERSE_LINES } from './messages.js'
 
 const BACK_RANK = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
@@ -40,6 +41,144 @@ export function createInitialState() {
     mountedLeft: {},
     history: [],
     powerUsed: new Map(), // Track which pieces have used which powers: square -> powerId
+    gem: null,
+    locked: null,
+    blocks: { w: 0, b: 0 },
+    reverses: { w: 0, b: 0 },
+    reverseGem: null,
+    usedGems: new Set(),
+    usedReverseGems: new Set(),
+  }
+}
+
+function placeGem(state) {
+  const empty = []
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (!state.board[r][c]) empty.push(squareName(r, c))
+    }
+  }
+  if (empty.length === 0) return
+  const candidates = empty.filter((s) => s !== (state.gem && state.gem.square) && !state.usedGems.has(s))
+  const sq = pick(candidates.length ? candidates : empty)
+  state.gem = { square: sq, owner: state.turn }
+  state.usedGems.add(sq)
+}
+
+export function spawnGem(inputState) {
+  if (inputState.gem || inputState.winner) return inputState
+  const state = { ...inputState, usedGems: new Set(inputState.usedGems) }
+  placeGem(state)
+  return state
+}
+
+function placeReverseGem(state) {
+  const empty = []
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (!state.board[r][c]) empty.push(squareName(r, c))
+    }
+  }
+  if (empty.length === 0) return
+  const busy = []
+  if (state.gem) busy.push(state.gem.square)
+  if (state.reverseGem) busy.push(state.reverseGem.square)
+  const candidates = empty.filter((s) => !busy.includes(s) && !state.usedReverseGems.has(s))
+  const sq = pick(candidates.length ? candidates : empty)
+  state.reverseGem = { square: sq, owner: state.turn }
+  state.usedReverseGems.add(sq)
+}
+
+export function spawnReverseGem(inputState) {
+  if (inputState.reverseGem || inputState.winner) return inputState
+  const state = { ...inputState, usedReverseGems: new Set(inputState.usedReverseGems) }
+  placeReverseGem(state)
+  return state
+}
+
+export function potBlockSquaresFrom(blockSquare) {
+  const { r, c } = rcOf(blockSquare)
+  const out = []
+  for (let dr = 0; dr <= 1; dr++) {
+    for (let dc = 0; dc <= 1; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
+    }
+  }
+  return out
+}
+
+function potBlockPieces(board, color, blockSquare) {
+  return potBlockSquaresFrom(blockSquare).filter((sq) => {
+    const { r: br, c: bc } = rcOf(sq)
+    return board[br] && board[br][bc] && board[br][bc].color === color
+  })
+}
+
+// área 9x9 de casillas alrededor de la olla donde se puede deslizar el bloque 2x2
+export function potAreaSquares(origin) {
+  const { r, c } = rcOf(origin)
+  const out = []
+  for (let dr = -4; dr <= 4; dr++) {
+    for (let dc = -4; dc <= 4; dc++) {
+      const rr = r + dr
+      const cc = c + dc
+      if (isInBoard(rr, cc)) out.push(squareName(rr, cc))
+    }
+  }
+  return out
+}
+
+export function applyBlock(inputState, blockSquare) {
+  const color = inputState.turn
+  if (inputState.blocks[color] < 1 || !blockSquare) return inputState
+  const state = {
+    ...inputState,
+    blocks: { ...inputState.blocks },
+    locked: inputState.locked ? { ...inputState.locked, squares: new Set(inputState.locked.squares) } : null,
+  }
+  const enemy = color === 'w' ? 'b' : 'w'
+  const blockSquares = potBlockSquaresFrom(blockSquare)
+  const squares = potBlockPieces(state.board, enemy, blockSquare)
+  state.blocks[color] -= 1
+  state.locked = {
+    owner: color,
+    squares: new Set(squares),
+    block: blockSquares,
+  }
+  return state
+}
+
+export function applyReverse(inputState, force = false) {
+  const color = inputState.turn
+  if (!force && inputState.reverses[color] < 1) return inputState
+  const board = inputState.board.map((row) =>
+    row.map((cell) => (cell ? { ...cell, color: cell.color === 'w' ? 'b' : 'w' } : null))
+  )
+  const mounted = new Set(inputState.mounted)
+  const mountedLeft = { ...inputState.mountedLeft }
+  const locked = inputState.locked
+    ? {
+        ...inputState.locked,
+        owner: inputState.locked.owner === 'w' ? 'b' : 'w',
+        squares: new Set(inputState.locked.squares),
+        block: inputState.locked.block ? [...inputState.locked.block] : null,
+      }
+    : null
+  const reverses = { w: inputState.reverses.w, b: inputState.reverses.b }
+  reverses[color] = Math.max(0, reverses[color] - 1)
+  const swappedReverses = { w: reverses.b, b: reverses.w }
+  const swappedBlocks = { w: inputState.blocks.b, b: inputState.blocks.w }
+  return {
+    ...inputState,
+    board,
+    mounted,
+    mountedLeft,
+    locked,
+    reverses: swappedReverses,
+    blocks: swappedBlocks,
+    reversed: !inputState.reversed,
   }
 }
 
@@ -63,6 +202,7 @@ export function boardPosition(state) {
 }
 
 export function getMoves(state, square) {
+  if (state.locked && state.locked.squares.has(square)) return []
   const { r, c } = rcOf(square)
   if (!isInBoard(r, c)) return []
   const me = state.board[r][c]
@@ -166,6 +306,7 @@ export function getMoves(state, square) {
 }
 
 export function applyMove(inputState, from, to, move) {
+  if (move && move.move && move.isPower === undefined) move = move.move
   const state = {
     ...inputState,
     board: cloneBoard(inputState.board),
@@ -173,6 +314,13 @@ export function applyMove(inputState, from, to, move) {
     mountedLeft: { ...inputState.mountedLeft },
     history: [...inputState.history],
     powerUsed: new Map(inputState.powerUsed), // Clone the powerUsed map
+    usedGems: new Set(inputState.usedGems),
+    usedReverseGems: new Set(inputState.usedReverseGems),
+    blocks: { ...inputState.blocks },
+    reverses: { ...inputState.reverses },
+    locked: inputState.locked
+      ? { ...inputState.locked, squares: new Set(inputState.locked.squares), block: inputState.locked.block ? [...inputState.locked.block] : null }
+      : null,
   }
 
   const { r, c } = rcOf(from)
@@ -208,7 +356,8 @@ export function applyMove(inputState, from, to, move) {
   state.board[r][c] = null
 
   let promotedToQueen = false
-  if (me.type === 'p' && (tr === 0 || tr === 7) && !wasMounted && !isMerge) {
+  const promoRank = me.color === 'w' ? 0 : 7
+  if (me.type === 'p' && tr === promoRank && !wasMounted && !isMerge) {
     state.board[tr][tc] = { type: 'q', color: me.color }
     promotedToQueen = true
   }
@@ -279,8 +428,7 @@ export function applyMove(inputState, from, to, move) {
       const eject = findNearestEmptySquare(state.board, sr.r, sr.c)
       if (eject) {
         const er = rcOf(eject)
-        state.board[er.r][er.c] =
-          er.r === 0 || er.r === 7 ? { type: 'q', color } : { type: 'p', color }
+        state.board[er.r][er.c] = { type: 'p', color }
       }
       events.messages.push({ text: pick(DISMOUNT_LINES), kind: 'info' })
       events.sounds.push('dismount')
@@ -293,8 +441,6 @@ export function applyMove(inputState, from, to, move) {
     events.sounds.push('victory')
   }
 
-  state.turn = me.color === 'w' ? 'b' : 'w'
-
   state.history.push({
     from,
     to,
@@ -305,5 +451,40 @@ export function applyMove(inputState, from, to, move) {
     comment: events.messages.length > 0 ? events.messages[events.messages.length - 1].text : pick(MOVE_LINES),
   })
 
+  if (state.gem && to === state.gem.square) {
+    events.messages.push({ text: pick(POT_LINES), kind: 'power' })
+    events.sounds.push('power')
+    state.blocks[me.color] = (state.blocks[me.color] || 0) + 1
+    state.gem = null
+  }
+  if (state.reverseGem && to === state.reverseGem.square) {
+    events.messages.push({ text: pick(REVERSE_LINES), kind: 'power' })
+    events.sounds.push('power')
+    state.reverses[me.color] = (state.reverses[me.color] || 0) + 1
+    state.reverseGem = null
+  }
+  state.turn = me.color === 'w' ? 'b' : 'w'
+
+  if (state.locked && state.locked.owner === state.turn) {
+    state.locked = null
+  }
+
+  // Rival immobilized? No legal moves → the side that just moved wins.
+  if (!state.winner && !hasLegalMoves(state)) {
+    state.winner = me.color
+    events.sounds.push('victory')
+  }
+
   return { state, events }
+}
+
+function hasLegalMoves(state) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]
+      if (!p || p.color !== state.turn) continue
+      if (getMoves(state, squareName(r, c)).length > 0) return true
+    }
+  }
+  return false
 }

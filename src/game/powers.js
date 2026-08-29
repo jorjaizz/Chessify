@@ -112,7 +112,7 @@ export const POWERS = [
       'A bishop prays in secret for divine intervention. With a low chance, God answers with holy wrath, striking down a random enemy piece.',
     details:
       'Click an eligible bishop, grab the PRAYER pill and drop it onto any enemy piece. The bishop prays... and by divine chance, might invoke the wrath of the Almighty. Only a random enemy piece knows the truth.',
-    invocationChance: 0.15, // 15% chance (modifiable for testing)
+    invocationChance: 100, // 15% chance (modifiable for testing)
     canUse(state, square, me) {
       if (!me || me.type !== 'b') return false
       if (me.color !== state.turn) return false

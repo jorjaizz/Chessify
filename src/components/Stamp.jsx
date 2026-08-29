@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+      import { motion } from 'framer-motion'
 
 const VARIANTS = {
   power: { border: 'border-volt', text: 'text-volt' },

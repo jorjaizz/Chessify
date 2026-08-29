@@ -2,18 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createInitialState, getMoves, applyMove, boardPosition } from '../game/engine.js'
-import { rcOf, squareName } from '../game/constants.js'
+import { useMutation } from 'convex/react'
+import { createInitialState, getMoves, applyMove, boardPosition, spawnGem, spawnReverseGem, applyBlock, potBlockSquaresFrom, potAreaSquares } from '../game/engine.js'
+import { rcOf, squareName, GEM_INTERVAL_MS, REVERSE_INTERVAL_MS } from '../game/constants.js'
 import { POWERS } from '../game/powers.js'
+import { chooseBotMove } from '../game/bot.js'
 import { sfx } from '../game/sound.js'
+import { api } from '../../convex/_generated/api'
 import Stamp from './Stamp.jsx'
 import GameOver from './GameOver.jsx'
-import MountedPiece from './MountedPiece.jsx'
 import SpritePiece from './SpritePiece.jsx'
 import MountedSprite from './MountedSprite.jsx'
 import { spriteSrc, spriteWithPower } from './pieceSprites.js'
 import HistoryPanel from './HistoryPanel.jsx'
 import PowerSidebar from './PowerSidebar.jsx'
+import potGif from '../assets/sprites/BloqueoPiezas/Bloqueodeturno.gif'
+import potStatic from '../assets/sprites/BloqueoPiezas/Bloqueodeturnostatico.png'
+import reversePng from '../assets/sprites/SwitchPiezas/reverse.png'
 
 function useBoardWidth() {
   const ref = useRef(null)
@@ -124,18 +129,67 @@ function PoweredSpritePiece({ type, color, game }) {
   return <SpritePiece src={src} />
 }
 
-export default function GameScreen({ onMenu }) {
+function spritePieces(color) {
+  const pieces = {}
+  for (const type of PIECE_TYPES) {
+    const src = spriteSrc(color, type)
+    if (!src) continue
+    pieces[color + type.toUpperCase()] = () => <SpritePiece src={src} />
+  }
+  return pieces
+}
+
+const customPieces = {
+  ...spritePieces('b'),
+  ...spritePieces('w'),
+  wC: () => <MountedSprite color="w" />,
+  bC: () => <MountedSprite color="b" />,
+}
+
+function visualRC(r, c, orientation) {
+  if (orientation === 'black') return { r: 7 - r, c: 7 - c }
+  return { r, c }
+}
+
+function overlayBox(square, orientation, cells = 1) {
+  let { r, c } = rcOf(square)
+  if (orientation === 'black') {
+    r = 7 - r - (cells - 1)
+    c = 7 - c - (cells - 1)
+  }
+  return {
+    left: `${c * 12.5}%`,
+    top: `${r * 12.5}%`,
+    width: `${cells * 12.5}%`,
+    height: `${cells * 12.5}%`,
+  }
+}
+
+export default function GameScreen({ onMenu, mode = 'local', botLevel = 'regular' }) {
   const [game, setGame] = useState(createInitialState)
   const [selected, setSelected] = useState(null)
   const [activePower, setActivePower] = useState(null)
   const [toast, setToast] = useState(null)
   const [mountFx, setMountFx] = useState(null)
   const [kickFx, setKickFx] = useState(null)
+  const [blockFx, setBlockFx] = useState(null)
+  const [potArmed, setPotArmed] = useState(false)
+  const [potColor, setPotColor] = useState(null)
+  const [potOrigin, setPotOrigin] = useState(null)
+  const [potHover, setPotHover] = useState(null)
+  const [orientation, setOrientation] = useState('white')
+  const [reverseFx, setReverseFx] = useState(null)
   const toastKey = useRef(0)
   const fxKey = useRef(0)
+  const blockFxKey = useRef(0)
   const fxTimer = useRef(null)
   const kickKey = useRef(0)
   const kickTimer = useRef(null)
+  const botBusy = useRef(false)
+  const recordResult = useMutation(api.users.recordResult)
+  const blockTimer = useRef(null)
+  const reverseFxKey = useRef(0)
+  const reverseTimer = useRef(null)
   const [boardWrapRef, boardWidth] = useBoardWidth()
 
   // Build custom pieces with power-activated sprite variants
@@ -146,7 +200,7 @@ export default function GameScreen({ onMenu }) {
     bB: () => <PoweredSpritePiece type="b" color="b" game={game} />,
     bN: () => <PoweredSpritePiece type="n" color="b" game={game} />,
     bP: () => <PoweredSpritePiece type="p" color="b" game={game} />,
-    wC: ({ squareWidth }) => <MountedPiece color="w" squareWidth={squareWidth} />,
+    wC: () => <MountedSprite color="w" />,
     bC: () => <MountedSprite color="b" />,
   }
 
@@ -163,8 +217,9 @@ export default function GameScreen({ onMenu }) {
     }
   }
 
-  function execute(move) {
-    if (!move) return false
+  function execute(raw) {
+    if (!raw) return false
+    const move = raw.move && raw.from && raw.to && raw.isPower === undefined ? raw.move : raw
     if (move.isPower && move.powerId === 'horseride') {
       clearTimeout(fxTimer.current)
       fxKey.current += 1
@@ -177,16 +232,31 @@ export default function GameScreen({ onMenu }) {
       setKickFx({ to: move.kickTarget, key: kickKey.current })
       kickTimer.current = setTimeout(() => setKickFx(null), 550)
     }
+    const landedOnReverse = !!game.reverseGem && move.to === game.reverseGem.square
+    const reverseSquare = landedOnReverse ? game.reverseGem.square : null
     const { state, events } = applyMove(game, move.from, move.to, move)
     setGame(state)
     announce(events)
+    if (mode === 'bot' && state.winner) {
+      recordResult({ result: state.winner === 'w' ? 'win' : 'loss' }).catch(() => {})
+    }
     setSelected(null)
     setActivePower(null)
+    if (landedOnReverse && reverseSquare) {
+      clearTimeout(reverseTimer.current)
+      reverseFxKey.current += 1
+      setReverseFx({ square: reverseSquare, key: reverseFxKey.current })
+      reverseTimer.current = setTimeout(() => {
+        setOrientation((o) => (o === 'white' ? 'black' : 'white'))
+        setReverseFx(null)
+      }, 450)
+    }
     return true
   }
 
   function onPieceDrop(sourceSquare, targetSquare) {
     if (game.winner) return false
+    if (mode === 'bot' && game.turn === 'b') return false
     const all = getMoves(game, sourceSquare)
     const move = activePower && activePower.square === sourceSquare
       ? all.filter((m) => m.isPower && m.powerId === activePower.id).find((m) => m.to === targetSquare || m.kickTarget === targetSquare)
@@ -197,6 +267,11 @@ export default function GameScreen({ onMenu }) {
 
   function onSquareClick(square) {
     if (game.winner) return
+    if (mode === 'bot' && game.turn === 'b') return
+    if (potOrigin) {
+      confirmPotSquare(square)
+      return
+    }
     if (activePower) {
       const m = getMoves(game, activePower.square).find(
         (x) => x.isPower && x.powerId === activePower.id && (x.to === square || x.kickTarget === square)
@@ -215,7 +290,8 @@ export default function GameScreen({ onMenu }) {
       }
     }
     const cell = game.board[rcOf(square).r]?.[rcOf(square).c]
-    setSelected(cell && cell.color === game.turn ? square : null)
+    const lockedHere = game.locked && game.locked.squares.has(square)
+    setSelected(cell && cell.color === game.turn && !lockedHere ? square : null)
   }
 
   function armPower(id) {
@@ -224,17 +300,166 @@ export default function GameScreen({ onMenu }) {
     setActivePower({ id, square: selected })
   }
 
+  function armBlock(color) {
+    if (game.blocks[color] < 1 || game.turn !== color) return
+    sfx.click()
+    setPotColor(color)
+    setPotArmed(true)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function useReverse() {
+    if (game.winner || game.reverses[game.turn] < 1) return
+    sfx.click()
+    setGame((g) => ({
+      ...g,
+      reverses: { ...g.reverses, [g.turn]: Math.max(0, g.reverses[g.turn] - 1) },
+    }))
+    setOrientation((o) => (o === 'white' ? 'black' : 'white'))
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function leaveBlockMode() {
+    setPotArmed(false)
+    setPotColor(null)
+    setPotOrigin(null)
+    setPotHover(null)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function onPotDrop(targetSquare) {
+    if (!targetSquare) return
+    sfx.click()
+    setPotOrigin(targetSquare)
+    setPotHover(targetSquare)
+    setPotArmed(false)
+    setSelected(null)
+    setActivePower(null)
+  }
+
+  function confirmPotSquare(blockSquare) {
+    if (!potOrigin || !blockSquare) return
+    sfx.click()
+    const block = potBlockSquaresFrom(blockSquare)
+    setGame((g) => applyBlock(g, blockSquare))
+    blockFxKey.current += 1
+    setBlockFx({ key: blockFxKey.current, block })
+    clearTimeout(blockTimer.current)
+    blockTimer.current = setTimeout(() => setBlockFx(null), 750)
+    leaveBlockMode()
+  }
+
+  function cancelPotSelection() {
+    leaveBlockMode()
+  }
+
+  function onPotDragStart(e) {
+    e.dataTransfer.setData('text/plain', 'pot')
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(e.currentTarget, 20, 20)
+  }
+
+  function squareFromEvent(e) {
+    const el = boardWrapRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const offset = 10
+    const bx = rect.left + offset
+    const by = rect.top + offset
+    const sq = boardWidth / 8
+    let col = Math.floor((e.clientX - bx) / sq)
+    let row = Math.floor((e.clientY - by) / sq)
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null
+    if (orientation === 'black') {
+      col = 7 - col
+      row = 7 - row
+    }
+    return 'abcdefgh'[col] + '87654321'[row]
+  }
+
+  function onBoardMove(e) {
+    if (!potOrigin) return
+    const target = squareFromEvent(e)
+    if (target && potAreaSquares(potOrigin).includes(target)) setPotHover(target)
+  }
+
+  function onBoardDrop(e) {
+    if (!potArmed) return
+    e.preventDefault()
+    const target = squareFromEvent(e)
+    if (target) onPotDrop(target)
+  }
+
   function reset() {
     setGame(createInitialState())
     setSelected(null)
     setActivePower(null)
+    setPotArmed(false)
+    setPotColor(null)
+    setPotOrigin(null)
+    setPotHover(null)
     setToast(null)
     setMountFx(null)
+    setBlockFx(null)
+    setReverseFx(null)
+    setOrientation('white')
     setKickFx(null)
     clearTimeout(fxTimer.current)
     clearTimeout(kickTimer.current)
+    botBusy.current = false
+    clearTimeout(blockTimer.current)
+    clearTimeout(reverseTimer.current)
     sfx.click()
   }
+
+  useEffect(() => {
+    if (mode !== 'bot' || game.winner || game.turn !== 'b' || botBusy.current) return
+    botBusy.current = true
+    const t = setTimeout(() => {
+      if (!botBusy.current) return
+      botBusy.current = false
+      const cm = chooseBotMove(game, botLevel)
+      if (cm) execute(cm)
+    }, 650)
+    return () => {
+      clearTimeout(t)
+      botBusy.current = false
+    }
+  }, [game])
+
+  useEffect(() => {
+    if (game.winner || game.gem) return
+    const id = setInterval(() => {
+      setGame((g) => {
+        if (g.winner || g.gem) return g
+        const next = spawnGem(g)
+        if (next !== g) {
+          toastKey.current += 1
+          setToast({ text: '🍲 Olla sobre el tablero', kind: 'power', key: toastKey.current })
+        }
+        return next
+      })
+    }, GEM_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [game.winner, game.gem])
+
+  useEffect(() => {
+    if (game.winner || game.reverseGem) return
+    const id = setInterval(() => {
+      setGame((g) => {
+        if (g.winner || g.reverseGem) return g
+        const next = spawnReverseGem(g)
+        if (next !== g) {
+          toastKey.current += 1
+          setToast({ text: '🔄 Carta reversible sobre el tablero', kind: 'power', key: toastKey.current })
+        }
+        return next
+      })
+    }, REVERSE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [game.winner, game.reverseGem])
 
   const flashSquares = eligibleAbilities(game)
   const selectedAbilities = selected ? abilitiesFor(game, selected) : []
@@ -245,18 +470,22 @@ export default function GameScreen({ onMenu }) {
   const selRC = selected ? rcOf(selected) : null
   const menuStyle = selRC
     ? (() => {
-        const tx = selRC.c <= 1 ? '0%' : selRC.c >= 6 ? '-100%' : '-50%'
-        const ty = selRC.r <= 1 ? '16px' : 'calc(-100% - 10px)'
+        const { r: vr, c: vc } = visualRC(selRC.r, selRC.c, orientation)
+        const tx = vc <= 1 ? '0%' : vc >= 6 ? '-100%' : '-50%'
+        const ty = vr <= 1 ? '16px' : 'calc(-100% - 10px)'
         return {
-          left: `${(selRC.c + 0.5) * 12.5}%`,
-          top: `${(selRC.r + 0.5) * 12.5}%`,
+          left: `${(vc + 0.5) * 12.5}%`,
+          top: `${(vr + 0.5) * 12.5}%`,
           transform: `translate(${tx}, ${ty})`,
         }
       })()
     : null
 
+  const potArea = potOrigin ? potAreaSquares(potOrigin) : []
+  const potPreview = potOrigin && potHover ? potBlockSquaresFrom(potHover) : []
+
   return (
-    <div className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
+    <div data-mode={mode} className="grain-bg relative flex min-h-screen flex-col items-center gap-4 bg-ink px-4 py-6">
       <div className="flex w-full max-w-[560px] items-center justify-between font-mono text-xs uppercase tracking-widest">
         <div className="flex items-center gap-4">
           <button
@@ -279,7 +508,7 @@ export default function GameScreen({ onMenu }) {
 
       <div className="flex w-full max-w-[1100px] flex-col items-center justify-center gap-4 lg:flex-row lg:items-start">
         <div className="order-2 w-full max-w-[560px] lg:order-1 lg:w-56">
-          <PowerSidebar />
+          <PowerSidebar blocks={game.blocks} reverses={game.reverses} turn={game.turn} active={potColor} onUse={armBlock} onReverseUse={useReverse} />
         </div>
         <div className="order-1 flex w-full max-w-[560px] flex-col items-center gap-4 lg:order-2">
       <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
@@ -287,13 +516,29 @@ export default function GameScreen({ onMenu }) {
           <>
             <span className={`inline-block h-2 w-2 rounded-full ${game.turn === 'w' ? 'bg-paper' : 'bg-riot'}`} />
             {turnName} to move
+            {game.locked && (
+              <span className="text-riot">· {game.locked.squares.size} piezas bloqueadas 🔒</span>
+            )}
+            {mode === 'bot' && (
+              <span className={game.turn === 'b' ? 'text-riot' : 'text-volt'}>
+                {game.turn === 'b' ? ' · bot thinking…' : ' · you (white)'}
+              </span>
+            )}
           </>
         ) : (
           <span className="text-paper">game over</span>
         )}
       </div>
 
-      <div ref={boardWrapRef} className="relative w-full max-w-[560px]">
+      <div
+        ref={boardWrapRef}
+        className="relative w-full max-w-[560px]"
+        onDragOver={(e) => {
+          if (potArmed) e.preventDefault()
+        }}
+        onDrop={onBoardDrop}
+        onMouseMove={onBoardMove}
+      >
         <div className="relative rounded-sm border-2 border-ink-2 bg-ink-2 p-2">
           {['-left-[3px] -top-[3px] border-l-2 border-t-2', '-right-[3px] -top-[3px] border-r-2 border-t-2', '-left-[3px] -bottom-[3px] border-l-2 border-b-2', '-right-[3px] -bottom-[3px] border-r-2 border-b-2'].map((pos) => (
             <span key={pos} className={`pointer-events-none absolute h-4 w-4 border-volt ${pos}`} />
@@ -301,7 +546,7 @@ export default function GameScreen({ onMenu }) {
           <Chessboard
             id="chessify-board"
             position={boardPosition(game)}
-            boardOrientation="white"
+            boardOrientation={orientation}
             boardWidth={boardWidth}
             onPieceDrop={onPieceDrop}
             onPieceDragBegin={(piece, sourceSquare) => {
@@ -325,21 +570,93 @@ export default function GameScreen({ onMenu }) {
           className="pointer-events-none absolute"
           style={{ left: 10, top: 10, width: boardWidth, height: boardWidth }}
         >
-          {[...flashSquares].map((sq) => {
-            const { r, c } = rcOf(sq)
-            return (
-              <span
-                key={sq}
-                className="ability-cell"
-                style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%`, width: '12.5%', height: '12.5%' }}
-              >
-                <span className="ability-ring" />
-              </span>
-            )
-          })}
+          {game.gem && (
+            <div
+              className="gem-cell"
+              style={overlayBox(game.gem.square, orientation)}
+            >
+              <span className="gem-ring">🍲</span>
+            </div>
+          )}
+
+          {game.reverseGem && (
+            <div
+              key={`reverse-${game.reverseGem.square}`}
+              className="reverse-gem"
+              style={overlayBox(game.reverseGem.square, orientation)}
+            >
+              <img src={reversePng} alt="" className="reverse-gem-img" />
+            </div>
+          )}
+
+          {reverseFx && (
+            <div
+              key={`reverse-fx-${reverseFx.key}`}
+              className="reverse-fx"
+              style={overlayBox(reverseFx.square, orientation)}
+            >
+              <img src={reversePng} alt="" className="reverse-fx-img" />
+            </div>
+          )}
+
+          {game.locked && game.locked.block && game.locked.block.length === 4 && (
+            <div
+              key="locked-block"
+              className="locked-block"
+              style={overlayBox(game.locked.block[0], orientation, 2)}
+            >
+              <img src={potStatic} alt="" className="locked-block-img" />
+            </div>
+          )}
+
+          {blockFx && blockFx.block.length === 4 && (
+            <div
+              key={`blockfx-${blockFx.key}`}
+              className="block-drop"
+              style={overlayBox(blockFx.block[0], orientation, 2)}
+            >
+              <img src={potGif} alt="" className="locked-block-img" />
+            </div>
+          )}
+
+          {potArea.map((sq) => (
+            <div
+              key={`area-${sq}`}
+              className="pot-area-cell"
+              style={overlayBox(sq, orientation)}
+            />
+          ))}
+
+          {potOrigin && potBlockSquaresFrom(potHover).length === 4 && (
+            <div
+              className="pot-block"
+              style={overlayBox(potHover, orientation, 2)}
+            >
+              <img src={potGif} alt="" className="pot-block-gif" />
+            </div>
+          )}
+
+          {potOrigin && (
+            <span
+              className="pot-marker"
+              style={overlayBox(potOrigin, orientation)}
+            >
+              🍲
+            </span>
+          )}
+
+          {[...flashSquares].map((sq) => (
+            <span
+              key={sq}
+              className="ability-cell"
+              style={overlayBox(sq, orientation)}
+            >
+              <span className="ability-ring" />
+            </span>
+          ))}
 
           {Object.entries(game.mountedLeft || {}).map(([sq, n]) => {
-            const { r, c } = rcOf(sq)
+            const { r, c } = visualRC(rcOf(sq).r, rcOf(sq).c, orientation)
             return (
               <span
                 key={sq}
@@ -436,6 +753,68 @@ export default function GameScreen({ onMenu }) {
         </AnimatePresence>
       </div>
 
+      <AnimatePresence>
+        {(potArmed || potOrigin) && (
+          <div
+            key="powers-panel"
+            className="pointer-events-auto z-40 w-full max-w-[560px] rounded-sm border-2 border-riot bg-ink-2 p-3 shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.15 }}
+            >
+              <div className="mb-2 font-display text-sm uppercase tracking-widest text-riot">
+                ⚡ Block 2×2
+              </div>
+
+              {potArmed && !potOrigin && (
+                <div className="flex flex-wrap items-center gap-3 rounded-sm border border-riot/40 bg-ink px-3 py-2">
+                  <span className="pot-draggable" draggable onDragStart={onPotDragStart}>🍲</span>
+                  <span className="flex-1 font-mono text-[11px] uppercase tracking-wide text-muted">
+                    Arrastra la olla sobre una casilla para rodearla y deslizar el bloque 2×2
+                  </span>
+                  <button
+                    onClick={cancelPotSelection}
+                    className="rounded-sm border border-muted/40 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted transition-colors hover:text-paper"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {potOrigin && (
+                <div className="flex flex-col gap-2">
+                  <div className="rounded-sm border border-riot/40 bg-ink px-3 py-2">
+                    <div className="font-mono text-[11px] uppercase tracking-wide text-paper">
+                      🍲 Olla en {potOrigin}
+                    </div>
+                    <div className="mt-1 font-mono text-[10px] normal-case tracking-normal text-muted">
+                      Mueve el ratón por el área 9×9 (amarillo) para deslizar el bloque 2×2 (naranja). Clic en el tablero para confirmar.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => potHover && confirmPotSquare(potHover)}
+                      className="rounded-sm border border-volt bg-volt/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-volt transition-colors hover:bg-volt hover:text-ink"
+                    >
+                      Usar{potPreview.length ? ` (${potPreview.length})` : ''}
+                    </button>
+                    <button
+                      onClick={cancelPotSelection}
+                      className="rounded-sm border border-muted/40 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted transition-colors hover:text-paper"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="relative mt-1 flex h-12 w-full max-w-[560px] items-center justify-center">
         <AnimatePresence mode="wait">
           {toast && <Stamp key={toast.key} text={toast.text} kind={toast.kind} />}
@@ -447,6 +826,7 @@ export default function GameScreen({ onMenu }) {
           <HistoryPanel entries={game.history} />
         </div>
       </div>
+
     </div>
   )
 }
